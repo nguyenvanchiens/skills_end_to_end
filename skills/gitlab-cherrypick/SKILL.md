@@ -238,7 +238,17 @@ git log origin/main ^origin/release/<app>/<version> \
 
 **Step 3 — Hỏi user pick commit**:
 
-Hỏi: "Pick commit cần cherry-pick (theo số `#`):"
+**Bắt buộc in kèm hướng dẫn cú pháp** ngay dưới bảng commit (đừng chỉ hỏi trống "pick commit?"):
+
+```
+Pick commit cần cherry-pick (theo số # ở cột đầu):
+  • Nhiều commit rời:   2, 4
+  • Khoảng liên tục:    1-3
+  • Mix:                2, 4-6, 8
+  • Tất cả:             all
+  • Theo SHA:           f145c62, d336a84
+  • Huỷ:                cancel
+```
 
 | Format user trả lời | Diễn giải |
 |---|---|
