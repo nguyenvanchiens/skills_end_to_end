@@ -271,7 +271,7 @@ release/<app>/<v> ●───────●  ← (4) tạo MR cherry/* → rel
 |---|---|
 | **list releases** | List tất cả `release/<app>/<v>` có trong repo, group theo app, để user pick release cần patch |
 | **list commit main last &lt;N&gt; days** | List commit trên `main` trong N ngày qua (không cần release target). Khảo sát trước khi pick |
-| **cherry-pick to release/&lt;app&gt;/&lt;v&gt;** | Flow chính, **2 tầng interactive**: (0) **chọn nhánh release target** — gõ đủ `release/<app>/<v>` thì dùng luôn, còn thiếu thì skill **in danh sách release đánh số → pick theo `#`** → (1) hỏi N ngày → (2) list commit main (đã loại trừ commit có sẵn trên release) → (3) **chọn commit theo `#`** → confirm → tạo `cherry/main-to-release-<app>-<v>` từ release branch → `cherry-pick -x` chronological order → resolve conflict → **HỎI user xác nhận** trước khi push → tạo MR target = release branch |
+| **cherry-pick to release/&lt;app&gt;/&lt;v&gt;** | Flow chính, **interactive**: (0) **chọn nhánh release target** — gõ đủ `release/<app>/<v>` thì dùng luôn, thiếu thì skill **in danh sách release đánh số → pick `#`** → (1) **chọn source branch** (`main`/`dev` — nhánh tích hợp để lấy commit) + hỏi N ngày → (2) list commit `<source>` (đã loại trừ commit có sẵn trên release) → (3) **chọn commit theo `#`** (skill in kèm cú pháp `2,4` / `1-3` / `all`) → confirm → tạo `cherry/<source>-to-release-<app>-<v>` từ release branch → `cherry-pick -x` chronological → resolve conflict → **HỎI user xác nhận** trước khi push → tạo MR target = release branch |
 
 ### Naming convention
 

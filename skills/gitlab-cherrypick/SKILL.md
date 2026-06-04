@@ -46,9 +46,23 @@ main  ────────┼──→ release/gift-api/v0.5.3              
 
 ## Conventions
 
+### Source branch (nhánh tích hợp nguồn)
+
+> **`<source>` = nhánh tích hợp mà team merge feature vào** (source of truth để backport). Mặc định `main`. Một số project dùng `dev`/`develop`.
+
+- Skill **KHÔNG tự đoán** `<source>`. Quy tắc:
+
+  | Tình huống | Hành động |
+  |---|---|
+  | User nói rõ trong prompt (vd "cherry-pick từ dev", "backport từ develop") | Dùng luôn, **không hỏi** |
+  | Mọi trường hợp còn lại | **HỎI user chọn `main` hay `dev`** (chạy `git branch -r` gợi ý tên thật) trước khi list commit |
+
+- Một khi chốt `<source>`, dùng nhất quán cho: list commit (`git log origin/<source> ...`), loại trừ commit đã có trên release (`^origin/release/...`), và đặt tên cherry branch.
+- ⚠️ Đồng bộ với `gitlab-flow`: nếu project tạo feature branch từ `dev` thì `<source>` cherry-pick cũng là `dev`. Đừng cứng nhắc `main`.
+
 ### Cherry branch naming
 
-Format: `cherry/main-to-release-<app>-<version>[-<desc>]`
+Format: `cherry/<source>-to-release-<app>-<version>[-<desc>]` (vd `cherry/main-to-release-...` hoặc `cherry/dev-to-release-...`)
 
 | Use case | Tên nhánh ví dụ |
 |---|---|
@@ -59,7 +73,7 @@ Format: `cherry/main-to-release-<app>-<version>[-<desc>]`
 | Rule | Detail |
 |---|---|
 | Prefix | Luôn `cherry/` — KHÔNG dùng `feature/`, `fix/`, `sync/` |
-| Format cơ bản | `cherry/main-to-release-<app>-<version>` — đọc 1 phát biết chiều, app, version |
+| Format cơ bản | `cherry/<source>-to-release-<app>-<version>` — đọc 1 phát biết chiều, app, version |
 | Slash → dash | `release/<app>/<v>` (slash) → trong cherry branch dùng dash: `<app>-<v>` |
 | Optional suffix | Thêm `-<TASK-ID>-<short>` khi cherry-pick có theme rõ (vd hotfix VAT) |
 | Tuổi thọ | **Ephemeral** — xoá ngay sau khi MR merged |
@@ -130,30 +144,32 @@ Format report cho user (group theo app):
 
 Hỏi tiếp: "Bạn muốn cherry-pick vào release nào?" → trigger `cherry-pick to release/<app>/<v>`.
 
-### "list commit main last <N> days" / "liệt kê commit main 5 ngày" / "show me commit gần đây"
+### "list commit main last <N> days" / "liệt kê commit dev 5 ngày" / "show me commit gần đây"
 
-Liệt kê commit trên `main` trong N ngày qua — để user khảo sát trước khi quyết định pick.
+Liệt kê commit trên nhánh tích hợp (`<source>`) trong N ngày qua — để user khảo sát trước khi quyết định pick.
 
-**Step 1 — Detect N từ input**:
+**Step 1 — Detect source + N từ input**:
+
+- **Source**: user gõ tên nhánh trong trigger (`list commit dev 5 ngày`, `commit main ...`) → dùng nhánh đó. Không nói rõ → **hỏi `main` hay `dev`** (như mục **Source branch**).
+- **N (ngày)**:
 
 | Input | N (ngày) |
 |---|---|
-| `list commit main last 5 days` | 5 |
+| `list commit dev last 5 days` | 5 |
 | `liệt kê commit main 7 ngày` | 7 |
-| `show commit main 3 ngày qua` | 3 |
 | Không có số | STOP, hỏi: "Lùi bao nhiêu ngày? (default 7)" |
 
 **Step 2 — Fetch + list**:
 
 ```bash
-git fetch origin main
-git log origin/main --since="<N> days ago" --pretty=format:"%h|%an|%ad|%s" --date=short
+git fetch origin <source>
+git log origin/<source> --since="<N> days ago" --pretty=format:"%h|%an|%ad|%s" --date=short
 ```
 
 **Step 3 — Format đẹp cho user**:
 
 ```
-## Commit trên main (5 ngày qua, mới nhất ở dưới)
+## Commit trên <source> (5 ngày qua, mới nhất ở dưới)
 
 | # | SHA | Author | Date | Subject |
 |---|-----|--------|------|---------|
@@ -208,11 +224,12 @@ git ls-remote --heads origin "refs/heads/release/<app>/<version>" | head -1
 ```
 
 - Output rỗng → STOP, báo "Không tìm thấy `release/<app>/<version>`. Chạy `list releases` xem các release có sẵn"
-- Có output → tiếp tục Step 1 (chọn commit)
+- Có output → tiếp tục Step 1
 
-**Step 1 — Hỏi số ngày lùi**:
+**Step 1 — Xác định source branch + số ngày lùi**:
 
-Hỏi user: "Lùi bao nhiêu ngày để list commit main? (default 7)"
+1. **Source branch (`<source>`)** theo mục **Source branch**: trừ khi user nói rõ trong prompt, **HỎI user chọn `main` hay `dev`** (chạy `git branch -r` gợi ý). Đây là nhánh tích hợp để lấy commit backport. **KHÔNG mặc định cứng `main`.**
+2. **Số ngày lùi (N)**: Hỏi "Lùi bao nhiêu ngày để list commit `<source>`? (default 7)"
 
 | User trả lời | N |
 |---|---|
@@ -220,20 +237,20 @@ Hỏi user: "Lùi bao nhiêu ngày để list commit main? (default 7)"
 | `all` / `tất cả` | KHÔNG since filter (list từ phân kỳ với release) |
 | Enter / `default` | 7 |
 
-> Nếu user gõ trigger kèm `last <N> days` ngay từ đầu → skip hỏi, dùng N đó luôn.
+> Nếu user gõ trigger kèm `last <N> days` ngay từ đầu → skip hỏi N, dùng luôn. Source vẫn hỏi nếu chưa rõ.
 
-**Step 2 — List commit main, loại trừ commit có sẵn trên release**:
+**Step 2 — List commit `<source>`, loại trừ commit có sẵn trên release**:
 
 ```bash
-# Commit có trên main nhưng KHÔNG có trên release target
-git log origin/main ^origin/release/<app>/<version> \
+# Commit có trên <source> nhưng KHÔNG có trên release target
+git log origin/<source> ^origin/release/<app>/<version> \
     --since="<N> days ago" \
     --pretty=format:"%h|%an|%ad|%s" --date=short
 ```
 
 | Output | Hành động |
 |---|---|
-| Rỗng | STOP, báo "Không có commit mới trên main trong <N> ngày qua mà chưa có trên release. Thử tăng N hoặc check release đã up-to-date" |
+| Rỗng | STOP, báo "Không có commit mới trên `<source>` trong <N> ngày qua mà chưa có trên release. Thử tăng N hoặc check release đã up-to-date" |
 | Có list | Format đẹp như Step 3 của trigger `list commit main` (kèm số `#` để user pick) |
 
 **Step 3 — Hỏi user pick commit**:
@@ -283,13 +300,14 @@ Xác nhận? (yes / no / edit)
 
 ```bash
 git fetch origin release/<app>/<version>
-git checkout -b cherry/main-to-release-<app>-<version> origin/release/<app>/<version>
+git checkout -b cherry/<source>-to-release-<app>-<version> origin/release/<app>/<version>
 ```
 
-Vd cho `release/gift-api/v0.5.3`:
+Vd cho `release/gift-api/v0.5.3`, source = `main`:
 ```bash
 git checkout -b cherry/main-to-release-gift-api-v0.5.3 origin/release/gift-api/v0.5.3
 ```
+(source = `dev` → nhánh là `cherry/dev-to-release-gift-api-v0.5.3`)
 
 **Step 5 — Cherry-pick từng commit theo thứ tự chronological (cũ → mới)**:
 
@@ -360,19 +378,19 @@ git log origin/release/<app>/<version>..HEAD --oneline    # list commit vừa ch
 3. Đợi xác nhận:
 
 ```bash
-git push -u origin cherry/main-to-release-<app>-<version>
+git push -u origin cherry/<source>-to-release-<app>-<version>
 ```
 
 **Step 8 — Tạo MR `cherry/* → release/<app>/<version>`** (KHÔNG về main):
 
 ```bash
 glab mr create \
-  --source-branch cherry/main-to-release-<app>-<version> \
+  --source-branch cherry/<source>-to-release-<app>-<version> \
   --target-branch release/<app>/<version> \
-  --title "chore(cherry): backport <N> commit từ main → release/<app>/<version>" \
+  --title "chore(cherry): backport <N> commit từ <source> → release/<app>/<version>" \
   --description "$(cat <<'EOF'
 ## Summary
-- Cherry-pick <N> commit từ main vào release/<app>/<version>
+- Cherry-pick <N> commit từ <source> vào release/<app>/<version>
 - Mục đích: <patch release / hotfix / backport feature>
 
 ## Commits backported
@@ -407,9 +425,9 @@ EOF
 **Step 9 — Sau khi MR merged**:
 
 ```bash
-git checkout main
+git checkout <source>                                        # main hoặc dev — nhánh tích hợp
 git fetch --prune
-git branch -d cherry/main-to-release-<app>-<version>     # local đã xoá
+git branch -d cherry/<source>-to-release-<app>-<version>     # local đã xoá
 # Remote tự xoá bởi --remove-source-branch
 ```
 
