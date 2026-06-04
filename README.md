@@ -1,4 +1,4 @@
-# my-skills-gitlab-flow
+# test_skills
 
 Bộ skills GitLab workflow cho Claude Code và các AI coding harness khác. Tách ra từ [`nguyenvanchiens/my-skills`](https://github.com/nguyenvanchiens/my-skills) để gọn install khi project chỉ cần workflow GitLab.
 
@@ -24,7 +24,7 @@ Yêu cầu: Node.js (để dùng `npx`).
 ### Cài `gitlab-flow` (recommended — đã bao gồm `commit` + `review-branch`)
 
 ```bash
-npx skills add nguyenvanchiens/my-skills-gitlab-flow -s gitlab-flow -y -a claude-code --copy
+npx skills add nguyenvanchiens/test_skills -s gitlab-flow -y -a claude-code --copy
 ```
 
 ### Cài thêm `gitlab-sync` (Lead/Maintainer)
@@ -32,7 +32,7 @@ npx skills add nguyenvanchiens/my-skills-gitlab-flow -s gitlab-flow -y -a claude
 Chỉ Lead/Maintainer cần — dùng để sync `main → builds/dev/<app>` cho deploy QA monorepo multi-app:
 
 ```bash
-npx skills add nguyenvanchiens/my-skills-gitlab-flow -s gitlab-sync -y -a claude-code --copy
+npx skills add nguyenvanchiens/test_skills -s gitlab-sync -y -a claude-code --copy
 ```
 
 ### Cài thêm `gitlab-cherrypick` (Lead/Maintainer)
@@ -40,13 +40,13 @@ npx skills add nguyenvanchiens/my-skills-gitlab-flow -s gitlab-sync -y -a claude
 Chỉ Lead/Maintainer cần — dùng để cherry-pick commit `main → release/<app>/<version>` cho cut patch release:
 
 ```bash
-npx skills add nguyenvanchiens/my-skills-gitlab-flow -s gitlab-cherrypick -y -a claude-code --copy
+npx skills add nguyenvanchiens/test_skills -s gitlab-cherrypick -y -a claude-code --copy
 ```
 
 ### Cài tất cả 5 skills
 
 ```bash
-npx skills add nguyenvanchiens/my-skills-gitlab-flow --all -a claude-code --copy
+npx skills add nguyenvanchiens/test_skills --all -a claude-code --copy
 ```
 
 ### Cài standalone `commit` hoặc `review-branch`
@@ -54,8 +54,8 @@ npx skills add nguyenvanchiens/my-skills-gitlab-flow --all -a claude-code --copy
 Chỉ dùng nếu KHÔNG dùng GitLab/`glab`:
 
 ```bash
-npx skills add nguyenvanchiens/my-skills-gitlab-flow -s commit         -y -a claude-code --copy
-npx skills add nguyenvanchiens/my-skills-gitlab-flow -s review-branch  -y -a claude-code --copy
+npx skills add nguyenvanchiens/test_skills -s commit         -y -a claude-code --copy
+npx skills add nguyenvanchiens/test_skills -s review-branch  -y -a claude-code --copy
 ```
 
 ### Cài global (dùng cho mọi project)
@@ -63,7 +63,7 @@ npx skills add nguyenvanchiens/my-skills-gitlab-flow -s review-branch  -y -a cla
 Thêm `-g` vào lệnh, ví dụ:
 
 ```bash
-npx skills add nguyenvanchiens/my-skills-gitlab-flow -s gitlab-flow -y -g -a claude-code --copy
+npx skills add nguyenvanchiens/test_skills -s gitlab-flow -y -g -a claude-code --copy
 ```
 
 ### Cập nhật
@@ -85,10 +85,10 @@ Cờ `-a` chấp nhận: `claude-code`, `cursor`, `gemini-cli`, `codex`, `openco
 
 ```bash
 # Cursor
-npx skills add nguyenvanchiens/my-skills-gitlab-flow -s gitlab-flow -a cursor --copy
+npx skills add nguyenvanchiens/test_skills -s gitlab-flow -a cursor --copy
 
 # Tất cả harness phát hiện được
-npx skills add nguyenvanchiens/my-skills-gitlab-flow --all -a "*" --copy
+npx skills add nguyenvanchiens/test_skills --all -a "*" --copy
 ```
 
 ## Sử dụng `gitlab-flow`
@@ -107,12 +107,12 @@ Skill này không phải `/slash command` mà kích hoạt bằng **trigger phra
 
 | Prompt | Hành động |
 |---|---|
-| **create branch from task &lt;TASK-ID&gt;** | Bóc tách task title → đề xuất 1-2 branch ngắn (2-4 từ key, ≤50 chars), **DỪNG hỏi user pick**, pull `main`, rồi mới `git checkout -b feature/<TASK-ID>-<short-desc>` |
+| **create branch from task &lt;TASK-ID&gt;** | Bóc tách task title → đề xuất 1-2 branch ngắn (2-4 từ key, ≤50 chars), **DỪNG hỏi user pick tên branch**. Tiếp đó **HỎI user chọn base branch** (`main` hay `dev`/`develop`...) — trừ khi user đã nói rõ trong prompt (vd "base từ dev"). Dù chọn base nào cũng **luôn `git fetch` + `git pull`** lấy code mới nhất rồi mới `git checkout -b feature/<TASK-ID>-<short-desc>` |
 | **rename branch &lt;new-name&gt;** | Đổi tên branch hiện tại đồng bộ local + remote. Detect upstream → nếu chưa push: rename thuần. Đã push: rename local + push tên mới + hỏi xóa branch cũ trên remote. Tránh tình trạng local≠remote name làm hỏng push/MR sau đó |
 | (paste mô tả task Jira) | Đọc scope, sinh code theo convention project |
 | **review the last change** / **review change** | Chạy `git diff`, list issues `#1`, `#2`... |
 | **review change simplify** (thêm "simplify" bất kỳ vị trí) | Auto-fix mechanical issues (Reuse/Quality/Efficiency) trước, rồi list review issues |
-| **review the whole branch** | Review cumulative branch vs `main` qua 3 agent song song (Reuse / Quality / Efficiency), tự fix issues. **Macro review** trước khi commit cuối / mở MR. |
+| **review the whole branch** | Review cumulative branch vs `<base>` (main/dev đã chốt lúc tạo branch) qua 3 agent song song (Reuse / Quality / Efficiency), tự fix issues. **Macro review** trước khi commit cuối / mở MR. |
 | **commit and push không push** (kèm `--quick` nếu cần) | Self-contained — kế thừa toàn bộ spec của `/commit`: probe repo, partial-staging guard, atomic check, `.commit-scopes` allowlist, 11 types, footer (`Closes`/`Refs`...), Quick mode, WIP/Spike, revert format. TASK-ID tự lấy từ tên nhánh. Commit local xong **HỎI user** có push không (không tự push). Detect upstream tracking — nếu local branch khác upstream (rename scenario) → STOP, hướng user qua `rename branch`. Không cần cài skill `commit` riêng. |
 | **create a merge request** | `glab mr create` với title/description chuẩn |
 | **review the MR !&lt;N&gt;** | Lấy `glab mr diff <N>` + comment đã có. **MR chưa có comment** → review mới, list issues + verdict. **MR đã có comment** → review tiếp nối: đối chiếu issue cũ (`✓ Resolved` / `❌ Still open` / `⚠️ Partially`) + chỉ review commit mới push thêm |
@@ -151,12 +151,12 @@ Skill này không phải `/slash command` mà kích hoạt bằng **trigger phra
 
 - **Branch**: **default `feature/<TASK-ID>-<short-desc>`** cho mọi loại thay đổi (kể cả bug fix). User override bằng cách tự gõ `bugfix/...` hoặc `hotfix/...` (Mode A — skill respect nguyên si). Desc 2-4 từ key, kebab-case, không dấu, **tổng ≤50 chars**. Drop **type filler** (`Cai-tien`, `Improve`, `Fix`, `Sua`, `Tao`, `Add`, `Create`, `Them`, `Bo-sung`) nhưng **KEEP direction marker** (`Allow`, `Validate`, `Block`, `Duplicate`, `Stale`, `Missing`) **và context marker** (`Show`/`Display`, `Filter`/`Sort`, `Sync`/`Migrate`). Vd `feature/SMT-460-Allow-qty-0-checkin-checkout` (43), bug fix: `feature/HNCW-311-Duplicate-survey-log` (37)
 - **Commit**: `<type>(<scope>): <subject> (<TASK-ID>)` (vd `feat(auth): restrict login to allowed domains (WRA-40)`)
-- **Target branch**: mặc định `main` — nếu repo dùng `master`, thêm dòng vào `CLAUDE.md` của project: `Default branch: master (not main)`
+- **Base branch** (gốc tạo nhánh + target MR + merge-base review): mặc định `main`. Project tạo nhánh từ `dev`/`develop`/`master` → khi gõ `create branch from task`, skill **hỏi chọn `main` hay `dev`** rồi dùng nhất quán cho cả vòng đời branch (tạo nhánh, target MR, review). Dù chọn base nào cũng luôn `fetch` + `pull` mới nhất trước khi tạo. Có thể nói rõ trong prompt ("base từ dev") để khỏi hỏi.
 
 ### Safety rules
 
 - KHÔNG force push vào nhánh đã có MR mở
-- KHÔNG merge thẳng vào `main` từ local — luôn qua MR
+- KHÔNG merge thẳng vào `<base>` (main/dev) từ local — luôn qua MR
 - KHÔNG bypass hooks (`--no-verify`) trừ khi user yêu cầu rõ
 - KHÔNG commit secrets (`.env`, key, token, password)
 
@@ -171,7 +171,7 @@ Skill `gitlab-sync` pair với `gitlab-flow`. Sau khi feature merged main qua `g
 ### Cài đặt
 
 ```bash
-npx skills add nguyenvanchiens/my-skills-gitlab-flow -s gitlab-sync -y -a claude-code --copy
+npx skills add nguyenvanchiens/test_skills -s gitlab-sync -y -a claude-code --copy
 ```
 
 ### Khi nào cần `gitlab-sync`
@@ -236,7 +236,7 @@ Skill `gitlab-cherrypick` pair với `gitlab-flow`. Khi cần backport fix/featu
 ### Cài đặt
 
 ```bash
-npx skills add nguyenvanchiens/my-skills-gitlab-flow -s gitlab-cherrypick -y -a claude-code --copy
+npx skills add nguyenvanchiens/test_skills -s gitlab-cherrypick -y -a claude-code --copy
 ```
 
 ### Khi nào cần `gitlab-cherrypick`
@@ -298,7 +298,7 @@ Xem chi tiết đầy đủ ở [`skills/gitlab-cherrypick/SKILL.md`](skills/git
 ## Cấu trúc repo
 
 ```
-my-skills-gitlab-flow/
+test_skills/
 ├── README.md
 └── skills/
     ├── gitlab-flow/
