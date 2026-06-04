@@ -167,19 +167,40 @@ git log origin/main --since="<N> days ago" --pretty=format:"%h|%an|%ad|%s" --dat
 
 ### "cherry-pick to release/<app>/<v>" / "cherry-pick main vào release/<app>/<v>" / "backport sang release/<app>/<v>"
 
-Trigger chính. Interactive flow: list commit → user pick → execute.
+Trigger chính. Interactive flow 2 tầng: **chọn nhánh release** → list commit → **chọn commit** → execute.
 
-**Step 0 — Detect release target từ input**:
+> **Luồng 2 tầng interactive**: (0) **chọn nhánh release target** → (1-3) **chọn commit**. Luôn chốt nhánh trước khi đụng tới commit.
+
+**Step 0 — Xác định release target (CHỌN NHÁNH trước)**:
+
+Parse phần text sau trigger:
 
 | Input pattern | Hành động |
 |---|---|
-| `cherry-pick to release/gift-api/v0.5.3` | App = `gift-api`, version = `v0.5.3` |
-| `cherry-pick main vào release/portal-web-admin/v1.2.0` | App = `portal-web-admin`, version = `v1.2.0` |
-| `backport sang release/<app>/<v>` | Tương tự, parse app + version |
-| `cherry-pick to release` (không có app/version) | STOP, gọi `list releases` để user pick |
-| `cherry-pick WRA-40` (không có target) | STOP, hỏi: "Cherry-pick về release nào? Chạy `list releases` để xem options" |
+| Có **đủ** `release/<app>/<version>` (vd `cherry-pick to release/gift-api/v0.5.3`) | Dùng luôn app + version đó, **không hỏi** → sang "verify" |
+| Có app nhưng **thiếu version** (vd `cherry-pick to release gift-api`) | List các version của app đó → **user pick theo số** |
+| **Không có** app/version (vd `cherry-pick`, `cherry-pick WRA-40`, `backport fix VAT`) | **CHỌN NHÁNH interactive** (bên dưới) — KHÔNG tự đoán release nào |
 
-Verify release branch tồn tại trên remote:
+**Chọn nhánh interactive** (khi target chưa rõ): chạy logic `list releases`, in **danh sách release đánh số** rồi hỏi user pick:
+
+```
+## Chọn release branch để cherry-pick vào:
+
+| # | Release branch |
+|---|---|
+| 1 | release/portal-web-admin/v1.2.0 |
+| 2 | release/portal-web-admin/v1.3.0  (latest) |
+| 3 | release/gift-api/v0.5.3 |
+| 4 | release/gift-api/v0.6.0  (latest) |
+
+Pick số (vd `4`):
+```
+
+- User pick số → đó là release target.
+- User gõ thẳng `release/<app>/<v>` → cũng chấp nhận.
+- Repo **không có** release branch nào → STOP, báo "Chưa có release branch nào trên remote".
+
+**Verify** release target đã chốt tồn tại trên remote:
 
 ```bash
 git fetch --all --prune
@@ -187,7 +208,7 @@ git ls-remote --heads origin "refs/heads/release/<app>/<version>" | head -1
 ```
 
 - Output rỗng → STOP, báo "Không tìm thấy `release/<app>/<version>`. Chạy `list releases` xem các release có sẵn"
-- Có output → tiếp tục Step 1
+- Có output → tiếp tục Step 1 (chọn commit)
 
 **Step 1 — Hỏi số ngày lùi**:
 
