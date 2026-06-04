@@ -62,6 +62,8 @@ Quy trình chuẩn cho một feature/bugfix mới. Có 2 vai trò: **Developer**
   | Mọi trường hợp còn lại (mỗi lần `create branch from task`) | **LUÔN HỎI user chọn**: "Project này tạo branch từ đâu — `main` hay `dev`?" — kể cả khi remote có vẻ chỉ có 1 nhánh tích hợp |
 
 - Trước khi hỏi, chạy `git branch -r` để gợi ý option đúng tên thật trên remote (vd thấy `origin/develop` thì hỏi "`main` hay `develop`?"). Nếu user gõ tên khác (vd `staging`) → tôn trọng.
+- ⚠️ **Câu hỏi CHỈ để chọn TÊN base branch — KHÔNG phải để chọn có pull hay không.** Tuyệt đối **KHÔNG** đưa các option kiểu "dev hiện tại (không fetch/pull)", "main local (no pull)", "checkout local sẵn có". Mỗi option = một tên branch (`main`, `dev`, `develop`...). Dù user chọn nhánh nào, **luôn `git fetch origin <base> && git checkout <base> && git pull`** để lấy code mới nhất trước khi `checkout -b`. Tạo branch từ base chưa pull = sai (branch ra từ commit cũ).
+  - Ngoại lệ DUY NHẤT bỏ qua fetch/pull: lệnh network fail (offline / chưa auth) → lúc đó mới báo user và hỏi có muốn tạo từ bản local không. Không bao giờ đưa "no pull" thành lựa chọn mặc định.
 - Một khi user đã chọn `<base>` cho lần tạo branch này, dùng **nhất quán** cho cả vòng đời branch đó: checkout gốc khi tạo, `--target-branch` của MR, `git merge-base <base> HEAD` khi review whole branch, và checkout sau khi merge — **không hỏi lại** ở các trigger sau cho cùng branch.
 
 ### Target branch
@@ -127,7 +129,7 @@ Quy trình chuẩn cho một feature/bugfix mới. Có 2 vai trò: **Developer**
 **Step 4 — Tạo branch** (mọi mode):
 
 1. Đảm bảo working tree sạch (`git status`); có thay đổi chưa commit → hỏi user trước khi tiếp tục
-2. Xác định `<base>` theo mục **Base branch**: trừ khi user đã nói rõ trong prompt, **HỎI user chọn `main` hay `dev`** (chạy `git branch -r` trước để gợi ý đúng tên nhánh thật). Sau khi chọn, checkout `<base>`, pull về bản mới nhất: `git fetch origin <base> && git checkout <base> && git pull`
+2. Xác định `<base>` theo mục **Base branch**: trừ khi user đã nói rõ trong prompt, **HỎI user chọn TÊN base branch (`main` hay `dev`)** (chạy `git branch -r` trước để gợi ý đúng tên nhánh thật). Câu hỏi chỉ chọn tên nhánh — **KHÔNG** đưa option "không pull"/"local sẵn có". Sau khi chọn, **LUÔN** lấy code mới nhất rồi mới tạo branch: `git fetch origin <base> && git checkout <base> && git pull` (áp dụng cho mọi base, kể cả `dev`)
 3. Tạo branch (luôn nhánh `<base>` đang checkout):
    - Mode A/B: `git checkout -b <input-nguyên-si>` (Mode B: thêm prefix `feature/` mặc định)
    - Mode C/D: `git checkout -b <branch-user-pick>` (chỉ sau khi user đã chọn ở Step 3)
