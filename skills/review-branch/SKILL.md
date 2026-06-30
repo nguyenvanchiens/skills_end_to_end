@@ -1,37 +1,44 @@
 ---
 name: review-branch
-description: Review the cumulative changes of the current branch against main (committed + uncommitted) for reuse, quality, and efficiency, then fix any issues found. Use when finishing a feature branch before opening an MR.
+description: Review the cumulative changes of the current branch against its base branch (committed + uncommitted) for reuse, quality, and efficiency, then fix any issues found. Use when finishing a feature branch before opening an MR.
 ---
 
 # Review Branch: Code Review and Cleanup
 
-Review every change the current branch introduces relative to `main` — committed AND uncommitted — for reuse, quality, and efficiency. Fix issues directly.
+Review every change the current branch introduces relative to its base branch `<base>` — committed AND uncommitted — for reuse, quality, and efficiency. Fix issues directly.
 
 ## Phase 1: Identify Changes
 
-1. Resolve the merge base against `main`:
+1. **Determine the base branch `<base>` — do NOT assume `main`.** Run `git branch -r` to see the real integration branches on the remote, then:
+   Resolve `<base>` in this priority order (first match wins):
+   1. **Current branch has an open MR?** Run `glab mr view` (no arg → the MR of the *current* branch; works after `glab mr checkout <N>` or on any branch whose MR exists). If it returns an MR, use its `targetBranch` as `<base>` and don't ask — the MR declares what it merges into (`main`-primary repos → `main`, `dev`-primary repos → `dev`). If it returns nothing / errors (repo doesn't use MRs, or none opened yet), fall through.
+   2. **User named the base in the prompt** (e.g. "review against dev") → use it, don't ask.
+   3. **`<base>` already established for this branch earlier in the session** (e.g. by gitlab-flow when the branch was created) → reuse it.
+   4. **Otherwise** → ask the user once: "Review against which base — `main` or `dev`?" (offer the names you actually saw via `git branch -r`, e.g. `develop`/`master`).
+
+2. Resolve the merge base against `<base>`:
 
    ```bash
-   git merge-base main HEAD
+   git merge-base <base> HEAD
    ```
 
-2. If the current branch IS `main` (or no merge base differs from HEAD), tell the user there is nothing to review and stop.
+3. If the current branch IS `<base>` (or no merge base differs from HEAD), tell the user there is nothing to review and stop.
 
-3. Capture the cumulative diff (branch commits + working tree) into a temp file so the agents can read it without flooding your context:
+4. Capture the cumulative diff (branch commits + working tree) into a temp file so the agents can read it without flooding your context. Write it inside `.git/` (always present, writable, never committed) — do **not** use `/tmp/`, which does not exist reliably on Windows/PowerShell:
 
    ```bash
-   BASE=$(git merge-base main HEAD)
-   git diff --no-color "$BASE" > /tmp/review_branch.diff
-   wc -l /tmp/review_branch.diff
+   BASE=$(git merge-base <base> HEAD)
+   git diff --no-color "$BASE" > .git/review_branch.diff
+   wc -l .git/review_branch.diff
    ```
 
-4. Capture the list of new (untracked) files and their contents — `git diff` does not include them:
+5. Capture the list of new (untracked) files and their contents — `git diff` does not include them:
 
    ```bash
-   git ls-files --others --exclude-standard > /tmp/review_branch_new.txt
+   git ls-files --others --exclude-standard > .git/review_branch_new.txt
    ```
 
-5. Also capture the list of files changed (committed-only summary) so you can spot-check:
+6. Also capture the list of files changed (committed-only summary) so you can spot-check:
 
    ```bash
    git diff --stat "$BASE"
@@ -40,8 +47,8 @@ Review every change the current branch introduces relative to `main` — committ
 ## Phase 2: Launch Three Review Agents in Parallel
 
 Use the Agent tool to launch all three agents concurrently in a single message. Pass each agent:
-- The diff path (`/tmp/review_branch.diff`)
-- The new-files path (`/tmp/review_branch_new.txt`) so they read each new file in full
+- The diff path (`.git/review_branch.diff`)
+- The new-files path (`.git/review_branch_new.txt`) so they read each new file in full
 - The merge base context ("This is the cumulative diff of branch <name> against main")
 
 ### Agent 1: Code Reuse Review
@@ -87,4 +94,4 @@ When done, briefly summarize what was fixed (or confirm the code was already cle
 
 - This reviews the WHOLE branch's contribution, not just the latest commit. Use `/simplify` for the narrower "review uncommitted changes only" workflow.
 - If the diff is very large (>2000 lines), warn the user that the agent reviews may be coarse-grained, and suggest running the skill earlier next time (e.g. after each meaningful commit).
-- Determining "main": this skill assumes the branch's integration target is named `main`. If the repo uses `master` or `develop`, ask the user once, then use that.
+- Determining `<base>`: see Phase 1 step 1 — never assume `main`. Ask the user (`main` vs `dev`/`develop`/`master`) unless they named it in the prompt or it was already established earlier in the session. Once chosen, use the same `<base>` for the merge base and all comparisons.

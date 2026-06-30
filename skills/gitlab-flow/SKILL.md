@@ -1,6 +1,6 @@
 ---
 name: gitlab-flow
-description: Standard end-to-end workflow for shipping a feature/bugfix from a Jira task to a merged GitLab MR. Use when the user references a Jira task ID (WRA-XX, etc.), asks to "start a task", "create branch from task", "review the last change" / "review change" (optionally with "simplify" keyword, e.g. "review change simplify", to auto-clean before review), "review the whole branch", "commit and push", "create a merge request", "review the MR !N", "post review result to the MR", "fix all issues", or "merge the request". Covers branch naming, commit format, MR creation, micro + macro code review (3-agent parallel), fix loop, and merge.
+description: Standard end-to-end workflow for shipping a feature/bugfix from a Jira task to a merged GitLab MR. Use when the user references a Jira task ID (WRA-XX, etc.), asks to "start a task", "create branch from task", "rename branch", "review the last change" / "review change" (optionally with "simplify" keyword, e.g. "review change simplify", to auto-clean before review), "review the whole branch", "commit and push", "create a merge request", "review the MR !N", "post review result to the MR", "fix all issues", or "merge the request".
 ---
 
 # GitLab Flow (Jira → Code → MR → Merge)
@@ -205,19 +205,34 @@ Trigger match là lenient: thêm từ `simplify` bất kỳ vị trí trong câu
 
 4. Báo tóm tắt số issue đã fix + file đã đụng (hoặc "code đã sạch") rồi sang Step 1. **KHÔNG tự commit** — fix nằm ở working tree, gộp chung với review issues user fix sau.
 
-**Step 1 — Capture diff** cho review: `git diff` (hoặc `git diff HEAD` nếu đã staged). Trong simplify mode, đây là diff sau-fix.
+**Step 1 — Capture diff + NẠP CONTEXT** (đừng review diff trong "ống hút"):
 
-**Step 2 — Review** theo các tiêu chí:
-- Logic đúng với mô tả task không
+1. Capture diff: `git diff` (hoặc `git diff HEAD` nếu đã staged). Trong simplify mode, đây là diff sau-fix.
+2. **Đọc FULL các file đã đổi** (không chỉ diff hunk) — để thấy code xung quanh, import, hàm gọi tới. Review chỉ-diff là nguyên nhân #1 gây finding sai (đoán những thứ không nhìn thấy).
+3. **Grounding convention**: đọc `CLAUDE.md` (nếu có) + 1-2 file lân cận cùng thư mục/module để học convention THẬT của repo — đừng áp convention generic.
+4. **Grounding task**: nếu mô tả task (Jira) đã có trong hội thoại → dùng làm chuẩn "logic đúng/đủ chưa". Nếu CHƯA có và định đánh giá logic/edge-case → hỏi user 1 câu ngắn về mục tiêu task, hoặc nói rõ "review này chỉ xét quality/efficiency, không phán logic vì thiếu spec".
+
+**Step 2 — Review** theo các tiêu chí (chỉ flag khi đã đọc đủ context ở Step 1):
+- Logic đúng với mô tả task không *(chỉ phán khi có task context — xem Step 1.4)*
 - Có edge case nào chưa cover không
-- Có vi phạm convention/coding standard không
+- Có vi phạm convention/coding standard không *(theo convention thật đã đọc, không generic)*
 - Có code thừa, dead code, hoặc abstraction không cần thiết
 - Có lỗ hổng bảo mật (input validation, auth bypass, injection) không
 - Có ảnh hưởng performance đáng kể không
 
-**Step 3 — Báo cáo** dưới dạng danh sách có đánh số: `#1`, `#2`, ... để user dễ tham chiếu khi fix.
+**Step 3 — Verify findings (lọc false positive TRƯỚC khi báo)**: với mỗi finding, tự kiểm:
+- Gắn được **`file:line` cụ thể** không? Không → bỏ.
+- **Chứng minh được bằng code đã đọc** (không phải suy diễn từ diff) không? Không chắc → bỏ hoặc hạ thành "cần xác nhận", đừng list như lỗi chắc chắn.
+- Đề xuất fix có **thật sự áp dụng được** với codebase này không (helper/util mình gợi ý có tồn tại không)? → verify rồi mới đề xuất.
 
-**Lưu ý**: Simplify mode scope hẹp (chỉ uncommitted diff) + inline review. Diff lớn (>500 dòng) → dùng `review the whole branch` (3 agent song song) thay thế.
+> Thà báo 3 issue **chắc** còn hơn 10 issue nửa đoán. Finding không qua được Step 3 thì **không đưa vào danh sách**.
+
+**Step 4 — Báo cáo** dưới dạng danh sách có đánh số: `#1`, `#2`, ... mỗi issue kèm `file:line` + vấn đề + đề xuất fix, để user dễ tham chiếu.
+
+**Lưu ý — chọn đúng độ sâu (đừng kỳ vọng sai vào công cụ nhẹ)**:
+- Trigger này cố tình **lightweight** (inline, không spawn agent) → hợp để **liếc nhanh** đoạn vừa sửa. Dù đã nạp context + verify, nó vẫn nông hơn review chuyên sâu.
+- Muốn **chính xác/sâu hơn**: dùng skill built-in **`/code-review`** (đọc file thật + adversarial verify, loại false positive mạnh hơn) hoặc trigger **`review the whole branch`** (3 agent song song đọc full file).
+- Diff lớn (>500 dòng) hoặc nhiều commit → **bắt buộc** chuyển sang `review the whole branch`, đừng cố review inline.
 
 ### "Commit and push"
 
@@ -510,23 +525,29 @@ Refs WRA-201
 
 ### "review the whole branch" (review cumulative trước khi mở MR)
 
-Review TOÀN BỘ thay đổi của branch hiện tại so với `<base>` (mặc định `main` — xem mục **Base branch**) — committed + uncommitted — qua 3 agent song song, rồi tự fix issues. Khác `review the last change` ở điểm: nhìn cumulative diff (nhiều commit), 3 góc nhìn chuyên sâu, auto-fix các issue rõ ràng.
+Review TOÀN BỘ thay đổi của branch hiện tại so với `<base>` (cách xác định ở Phase 1 — KHÔNG mặc định `main`) — committed + uncommitted — qua 3 agent song song, rồi tự fix issues. Khác `review the last change` ở điểm: nhìn cumulative diff (nhiều commit), 3 góc nhìn chuyên sâu, auto-fix các issue rõ ràng.
 
 **Khi nào dùng**: sau khi đã có nhiều commit và push chính, **trước khi `create a merge request`**. Output có thể tạo thêm changes → cần thêm 1 lượt `commit and push` nữa rồi mới mở MR. Bỏ qua bước này nếu branch chỉ 1 commit nhỏ — `review the last change` là đủ.
 
 **Phase 1 — Identify changes**:
 
-1. Xác định `<base>` theo mục **Base branch** (mặc định `main`), rồi resolve merge base: `git merge-base <base> HEAD`
+1. **Xác định `<base>` — KHÔNG mặc định `main`** (thứ tự ưu tiên, dừng ở match đầu):
+   - **Nhánh hiện tại có MR?** Chạy `glab mr view` (không tham số → MR của nhánh đang đứng; áp dụng khi bạn đã checkout nhánh MR bằng glab/git/**SourceTree**). Có MR → dùng `targetBranch` của nó làm `<base>`, **không hỏi** (dự án main-chính → `main`, dev-chính → `dev`). Rỗng/lỗi → bỏ qua.
+   - **User nói rõ base trong prompt** ("vs dev") → dùng.
+   - **`<base>` đã chốt trong session** (vd lúc `create branch from task`) → tái dùng.
+   - **Còn lại** → HỎI `main`/`dev` (xem mục **Base branch**).
+
+   Rồi resolve merge base: `git merge-base <base> HEAD`
 2. Nếu branch hiện tại IS `<base>` (hoặc base = HEAD) → báo "không có gì để review" và STOP
-3. Capture cumulative diff (commit + working tree) vào temp file để các agent đọc mà không flood context:
+3. Capture cumulative diff (commit + working tree) vào temp file để các agent đọc mà không flood context. Ghi vào `.git/` (luôn tồn tại, writable, không bị commit) — **KHÔNG dùng `/tmp/`** vì trên Windows/PowerShell `/tmp/` không tồn tại ổn định:
    ```bash
    BASE=$(git merge-base <base> HEAD)
-   git diff --no-color "$BASE" > /tmp/review_branch.diff
-   wc -l /tmp/review_branch.diff
+   git diff --no-color "$BASE" > .git/review_branch.diff
+   wc -l .git/review_branch.diff
    ```
 4. Capture danh sách file untracked (diff không bao gồm):
    ```bash
-   git ls-files --others --exclude-standard > /tmp/review_branch_new.txt
+   git ls-files --others --exclude-standard > .git/review_branch_new.txt
    ```
 5. Stat tóm tắt để spot-check:
    ```bash
@@ -535,7 +556,7 @@ Review TOÀN BỘ thay đổi của branch hiện tại so với `<base>` (mặc
 
 **Phase 2 — Launch 3 agent SONG SONG** (1 message, 3 Agent tool calls):
 
-Mỗi agent nhận: đường dẫn diff + đường dẫn new-files + context "cumulative diff branch <name> against <base>".
+Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường dẫn new-files (`.git/review_branch_new.txt`) + context "cumulative diff branch <name> against <base>".
 
 | Agent | Tập trung | Flag điển hình |
 |---|---|---|
@@ -582,7 +603,7 @@ Mỗi agent nhận: đường dẫn diff + đường dẫn new-files + context "
    - Description đúng 3 section trên, không có section thứ 4
    - **KHÔNG có dòng nào** chứa các keyword: `Claude`, `Anthropic`, `🤖`, `Generated with`, `Co-authored-by:`, `https://claude.com`, `noreply@anthropic.com`
    - Nếu thấy có → **XÓA** trước khi gọi `glab mr create`
-6. Trả về URL của MR và số `!N` (không thêm comment giới thiệu AI sau khi MR tạo xong)
+7. Trả về URL của MR và số `!N` (không thêm comment giới thiệu AI sau khi MR tạo xong)
 
 **Ví dụ description ĐÚNG**:
 ```markdown
@@ -622,6 +643,10 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>  ❌ XÓA
 2. Lấy thông tin MR + comment đã có:
    - `glab mr view <N> --comments` (hiển thị cả note/discussion đã có)
 3. **BẮT BUỘC** lấy diff từ remote bằng `glab mr diff <N>`. **KHÔNG** thay thế bằng `git diff <base>...<source>` so với branch local — `main` (hoặc base) ở local có thể stale, dẫn tới review nhầm hàng trăm commits đã có sẵn trên remote. Nếu thực sự cần dùng `git diff` (vd để lấy stat), phải `git fetch origin <base-branch>` trước rồi so với `origin/<base-branch>`, không phải branch local.
+
+   > **Inline depth (mặc định) vs deep review.** Mức này review *text diff* từ remote → inline depth, **không cần checkout nhánh MR**. Đủ cho đa số MR. Muốn soi SÂU (3-agent đọc full file): về đúng nhánh source của MR trước (checkout bằng `glab mr checkout <N>`, `git checkout`, hoặc **SourceTree/GUI** — tool nào cũng được, skill chỉ cần HEAD ở đúng nhánh), rồi chạy `review the whole branch`, sau đó quay lại bước 4-5 để post. ⚠️ `review the whole branch` / `/code-review` đọc code **local** — không soi được remote MR khi đang đứng ở nhánh khác, nên checkout là bắt buộc nếu muốn deep.
+   >
+   > **Base cho deep review = target branch của MR**, KHÔNG hỏi `main`/`dev`. Lấy bằng `glab mr view <N>` (field targetBranch) — dự án main-chính ra `main`, dự án dev-chính ra `dev`. Dùng đúng nhánh đó làm `<base>` khi `review the whole branch` (đây là ngữ cảnh reviewer: base đã xác định sẵn từ MR, không thuộc trường hợp "hỏi user" ở Phase 1).
 4. **Phân nhánh theo trạng thái comment**:
 
    **(A) MR CHƯA có comment review nào** → review mới hoàn toàn:

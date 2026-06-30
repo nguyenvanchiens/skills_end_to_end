@@ -1,6 +1,6 @@
 ---
 name: gitlab-cherrypick
-description: Cherry-pick commit từ `main` vào `release/<app>/<version>` của monorepo multi-app để cut patch release / backport fix. Workflow interactive — user khai báo số ngày lùi (vd "5 ngày"), skill list commit history main (đã loại trừ commit có sẵn trên release), user pick number các commit cần backport. Skill bắt buộc dùng nhánh trung gian `cherry/*` để giữ nguyên tắc code chảy 1 chiều — KHÔNG commit thẳng vào `release/<app>/<version>`. Use khi user nói "cherry-pick to release/<app>/<v>", "cherry-pick main vào release", "backport WRA-40 sang release", "đưa commit vào release", "list commit main 5 ngày", "list releases", "patch release", hoặc khi cần đưa fix/feature từ main sang release branch.
+description: Cherry-pick commit từ nhánh tích hợp (`main`/`dev`) vào `release/<app>/<version>` của monorepo multi-app để cut patch release / backport fix. Use khi user nói "cherry-pick to release/<app>/<v>", "cherry-pick main vào release", "backport WRA-40 sang release", "đưa commit vào release", "list commit main 5 ngày", "list releases", "patch release", hoặc khi cần đưa fix/feature từ main sang release branch.
 ---
 
 # GitLab Cherry-pick (main → release/<app>/<version>)
