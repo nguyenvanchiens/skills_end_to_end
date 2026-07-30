@@ -163,6 +163,18 @@ Skill này không phải `/slash command` mà kích hoạt bằng **trigger phra
 
 > Lý do bỏ được `review the whole branch` ở phía member: lượt `review the MR !<ID>` của reviewer đã soát toàn bộ diff MR (full coverage). Member review sớm bằng `review the last change` chỉ để bắt lỗi rẻ ngay khi code, không cần lượt 3-agent.
 
+### Review output
+
+Cả 3 trigger review (`review the last change`, `review the whole branch`, `review the MR !<N>`) đều gán **severity** cho mỗi finding:
+
+| Severity | Hành động |
+|---|---|
+| `Blocker` (sai logic, security, mất data, crash) · `Major` (edge case thật, N+1 hot path, race) | **Fix** |
+| `Minor` (naming, code thừa, abstraction) | Chỉ liệt kê — gõ `fix issue #N` nếu muốn fix |
+| `Nit` (style, ý kiến cá nhân) | Bỏ, không báo |
+
+Không có Blocker/Major → skill trả **"Không có vấn đề chặn"** và dừng, không bịa thêm cho đủ danh sách. Đây là chủ đích: LLM reviewer có bias luôn phải tìm ra cái gì đó, khiến review sau fix lại ra issue mới không hồi kết. Mỗi finding bắt buộc có `file:line` + code đã đọc thật.
+
 ### Convention
 
 - **Branch**: **default `feature/<TASK-ID>-<short-desc>`** cho mọi loại thay đổi (kể cả bug fix). User override bằng cách tự gõ `bugfix/...` hoặc `hotfix/...` (Mode A — skill respect nguyên si). Desc 2-4 từ key, kebab-case, không dấu, **tổng ≤50 chars**. Drop **type filler** (`Cai-tien`, `Improve`, `Fix`, `Sua`, `Tao`, `Add`, `Create`, `Them`, `Bo-sung`) nhưng **KEEP direction marker** (`Allow`, `Validate`, `Block`, `Duplicate`, `Stale`, `Missing`) **và context marker** (`Show`/`Display`, `Filter`/`Sort`, `Sync`/`Migrate`). Vd `feature/SMT-460-Allow-qty-0-checkin-checkout` (43), bug fix: `feature/HNCW-311-Duplicate-survey-log` (37)

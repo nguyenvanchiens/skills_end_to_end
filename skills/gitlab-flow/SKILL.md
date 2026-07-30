@@ -90,6 +90,24 @@ Quy trình chuẩn cho một feature/bugfix mới. Có 2 vai trò: **Developer**
 
 **Switch language**: user trả lời / tiếp tục bằng ngôn ngữ khác (English chẳng hạn) → từ message đó trở đi mới đổi sang ngôn ngữ user dùng. Không tự đoán "trigger English ⇒ output English".
 
+### Review output (áp dụng cho MỌI trigger review)
+
+Áp dụng cho `review the last change`, `review the whole branch`, `review the MR !<N>`.
+
+| Severity | Gồm | Hành động |
+|---|---|---|
+| **Blocker** | Sai logic vs task, lỗ hổng security, mất data, crash | Fix |
+| **Major** | Edge case có khả năng xảy ra thật, N+1 / perf hot path, race condition | Fix |
+| **Minor** | Naming, code thừa, abstraction chưa gọn, comment thừa | **Chỉ liệt kê, KHÔNG fix** |
+| **Nit** | Style, format, ý kiến cá nhân | **Bỏ, không báo** |
+
+- Gán severity cho **mọi** finding. Không gán nổi ⇒ chưa đủ rõ ⇒ bỏ.
+- Auto-fix (Phase 3 của `review the whole branch`, `fix all issues`) **chỉ đụng Blocker + Major**. User gõ đích danh `fix issue #N` thì fix bất kể severity.
+- **Không có Blocker/Major → nói "Không có vấn đề chặn" rồi DỪNG.** 🚫 KHÔNG bịa thêm, KHÔNG nâng Nit lên Major để lấp danh sách. **Danh sách rỗng là kết quả hợp lệ.**
+- Mỗi finding phải có `file:line` + chứng minh từ code **đã đọc thật**. Không chắc → bỏ, hoặc ghi rõ "cần xác nhận".
+
+> Ngoại lệ: Step 0 của `review change simplify` — user gõ `simplify` = chủ động yêu cầu dọn Minor, nên bước đó được auto-fix Minor.
+
 ## Triggers & Procedures
 
 ### "create branch <name>" hoặc "create branch from task <TASK-ID>..."
@@ -558,6 +576,10 @@ Review TOÀN BỘ thay đổi của branch hiện tại so với `<base>` (cách
 
 Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường dẫn new-files (`.git/review_branch_new.txt`) + context "cumulative diff branch <name> against <base>".
 
+⚠️ **Bắt buộc chép nguyên văn vào prompt của cả 3 agent** — subagent chạy context riêng, KHÔNG thấy mục Review output ở Conventions:
+
+> Gán severity cho mọi finding: `Blocker` (sai logic/security/mất data/crash) · `Major` (edge case thật, N+1 hot path, race) · `Minor` (naming, code thừa) · `Nit` (style — bỏ, đừng báo). Mỗi finding phải có `file:line` + trích code chứng minh, không suy diễn từ diff. **Nếu không tìm thấy Blocker/Major nào, trả về danh sách rỗng — KHÔNG cố tìm cho đủ.**
+
 | Agent | Tập trung | Flag điển hình |
 |---|---|---|
 | **Code Reuse** | Tìm utility/helper đã có để thay function mới viết | New function duplicates existing helper, inline logic could use existing util (string manipulation, path handling, env checks, type guards) |
@@ -567,7 +589,7 @@ Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường
 **Phase 3 — Aggregate + fix**:
 
 1. Đợi cả 3 agent xong, gộp findings lại
-2. Fix trực tiếp từng issue trong working tree. False positive thì skip, không cãi.
+2. Fix trực tiếp trong working tree **chỉ `Blocker` + `Major`**. `Minor` gom vào mục riêng để user tự quyết, `Nit` bỏ. False positive thì skip, không cãi. Cả 3 agent trả rỗng → báo "Không có vấn đề chặn".
 3. **KHÔNG tự commit/push** — để user review changes rồi tự `commit and push` (sẽ hỏi xác nhận push như thường lệ)
 4. Tóm tắt: số issue đã fix, file đã đụng, status test/typecheck (nếu chạy)
 5. Gợi ý bước tiếp: nếu có fix → `commit and push` rồi `create a merge request`; nếu không có gì cần sửa → `create a merge request` luôn
@@ -693,7 +715,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>  ❌ XÓA
 ### "fix all issues" / "fix issue #<N>" / "fix issues #1, #2"
 1. Đọc lại các issue đã raise (từ comment trên MR hoặc từ output review trước đó)
 2. Nếu user chỉ định số issue → chỉ fix các issue đó
-3. Nếu "fix all" → fix tất cả
+3. Nếu "fix all" → fix `Blocker` + `Major`. `Minor` liệt kê lại, nói rõ "gõ `fix issue #N` nếu muốn fix cụ thể"
 4. Sau mỗi fix, verify ngắn (chạy test/build nếu có)
 5. Khi hoàn tất TẤT CẢ fix, **DỪNG và HỎI user** trước khi commit/push:
    - Tóm tắt các issue đã fix + file đã thay đổi
