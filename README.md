@@ -1,4 +1,4 @@
-# test_skills
+# skills_end_to_end
 
 Bộ skills GitLab workflow cho Claude Code và các AI coding harness khác. Tách ra từ [`nguyenvanchiens/my-skills`](https://github.com/nguyenvanchiens/my-skills) để gọn install khi project chỉ cần workflow GitLab.
 
@@ -24,7 +24,7 @@ Yêu cầu: Node.js (để dùng `npx`).
 ### Cài `gitlab-flow` (recommended — đã bao gồm `commit` + `review-branch`)
 
 ```bash
-npx skills add nguyenvanchiens/test_skills -s gitlab-flow -y -a claude-code --copy
+npx skills add nguyenvanchiens/skills_end_to_end -s gitlab-flow -y -a claude-code --copy
 ```
 
 ### Cài thêm `gitlab-sync` (Lead/Maintainer)
@@ -32,7 +32,7 @@ npx skills add nguyenvanchiens/test_skills -s gitlab-flow -y -a claude-code --co
 Chỉ Lead/Maintainer cần — dùng để sync `main → builds/dev/<app>` cho deploy QA monorepo multi-app:
 
 ```bash
-npx skills add nguyenvanchiens/test_skills -s gitlab-sync -y -a claude-code --copy
+npx skills add nguyenvanchiens/skills_end_to_end -s gitlab-sync -y -a claude-code --copy
 ```
 
 ### Cài thêm `gitlab-cherrypick` (Lead/Maintainer)
@@ -40,13 +40,13 @@ npx skills add nguyenvanchiens/test_skills -s gitlab-sync -y -a claude-code --co
 Chỉ Lead/Maintainer cần — dùng để cherry-pick commit `main → release/<app>/<version>` cho cut patch release:
 
 ```bash
-npx skills add nguyenvanchiens/test_skills -s gitlab-cherrypick -y -a claude-code --copy
+npx skills add nguyenvanchiens/skills_end_to_end -s gitlab-cherrypick -y -a claude-code --copy
 ```
 
 ### Cài tất cả 5 skills
 
 ```bash
-npx skills add nguyenvanchiens/test_skills --all -a claude-code --copy
+npx skills add nguyenvanchiens/skills_end_to_end --all -a claude-code --copy
 ```
 
 ### Cài standalone `review-branch`
@@ -54,7 +54,7 @@ npx skills add nguyenvanchiens/test_skills --all -a claude-code --copy
 Chỉ dùng nếu KHÔNG dùng GitLab/`glab` (skill `commit` đã deprecated — dùng `commit and push` của `gitlab-flow`):
 
 ```bash
-npx skills add nguyenvanchiens/test_skills -s review-branch  -y -a claude-code --copy
+npx skills add nguyenvanchiens/skills_end_to_end -s review-branch -y -a claude-code --copy
 ```
 
 ### Cài global (dùng cho mọi project)
@@ -62,7 +62,7 @@ npx skills add nguyenvanchiens/test_skills -s review-branch  -y -a claude-code -
 Thêm `-g` vào lệnh, ví dụ:
 
 ```bash
-npx skills add nguyenvanchiens/test_skills -s gitlab-flow -y -g -a claude-code --copy
+npx skills add nguyenvanchiens/skills_end_to_end -s gitlab-flow -y -g -a claude-code --copy
 ```
 
 ### Cập nhật
@@ -84,10 +84,10 @@ Cờ `-a` chấp nhận: `claude-code`, `cursor`, `gemini-cli`, `codex`, `openco
 
 ```bash
 # Cursor
-npx skills add nguyenvanchiens/test_skills -s gitlab-flow -a cursor --copy
+npx skills add nguyenvanchiens/skills_end_to_end -s gitlab-flow -a cursor --copy
 
 # Tất cả harness phát hiện được
-npx skills add nguyenvanchiens/test_skills --all -a "*" --copy
+npx skills add nguyenvanchiens/skills_end_to_end --all -a "*" --copy
 ```
 
 ## Sử dụng `gitlab-flow`
@@ -187,7 +187,7 @@ Skill `gitlab-sync` pair với `gitlab-flow`. Sau khi feature merged main qua `g
 ### Cài đặt
 
 ```bash
-npx skills add nguyenvanchiens/test_skills -s gitlab-sync -y -a claude-code --copy
+npx skills add nguyenvanchiens/skills_end_to_end -s gitlab-sync -y -a claude-code --copy
 ```
 
 ### Khi nào cần `gitlab-sync`
@@ -252,7 +252,7 @@ Skill `gitlab-cherrypick` pair với `gitlab-flow`. Khi cần backport fix/featu
 ### Cài đặt
 
 ```bash
-npx skills add nguyenvanchiens/test_skills -s gitlab-cherrypick -y -a claude-code --copy
+npx skills add nguyenvanchiens/skills_end_to_end -s gitlab-cherrypick -y -a claude-code --copy
 ```
 
 ### Khi nào cần `gitlab-cherrypick`
@@ -314,7 +314,7 @@ Xem chi tiết đầy đủ ở [`skills/gitlab-cherrypick/SKILL.md`](skills/git
 ## Cấu trúc repo
 
 ```
-test_skills/
+skills_end_to_end/
 ├── README.md
 └── skills/
     ├── gitlab-flow/

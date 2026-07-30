@@ -735,7 +735,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>  ❌ XÓA
 🚫 **KHÔNG tự copy/sync skill file vào `C:\Users\admin\.claude\skills\` (global skill location) trừ khi user yêu cầu rõ ràng.** Cùng nguyên tắc cho mọi system-level location: `~/.claude/`, `%APPDATA%/Claude/`, v.v.
 
 **Default action khi user báo skill bị stale/sai**:
-1. Verify trong source repo `my-skills` đã có version đúng
+1. Verify trong source repo `skills_end_to_end` đã có version đúng
 2. Gợi ý user chạy `npx skills update` trong project bị ảnh hưởng (KHÔNG `-g`)
 3. Gợi ý user restart Claude session để load skill mới
 4. **Chỉ copy thủ công tới global IF user explicitly request** (vd "sync luôn global đi")
@@ -747,7 +747,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>  ❌ XÓA
 
 **Khi user thực sự muốn cài global**: họ sẽ chủ động thêm `-g` flag:
 ```bash
-npx skills add nguyenvanchiens/my-skills -s gitlab-flow -y -g -a claude-code --copy
+npx skills add nguyenvanchiens/skills_end_to_end -s gitlab-flow -y -g -a claude-code --copy
 ```
 
 Cùng rule cho mọi command có khả năng write ra ngoài project (`cp` to `C:\Users\...`, `mkdir` ngoài project dir, etc.) — hỏi user trước.
