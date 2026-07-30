@@ -245,7 +245,17 @@ Trigger match là lenient: thêm từ `simplify` bất kỳ vị trí trong câu
 
 > Thà báo 3 issue **chắc** còn hơn 10 issue nửa đoán. Finding không qua được Step 3 thì **không đưa vào danh sách**.
 
-**Step 4 — Báo cáo** dưới dạng danh sách có đánh số: `#1`, `#2`, ... mỗi issue kèm `file:line` + vấn đề + đề xuất fix, để user dễ tham chiếu.
+**Step 4 — Báo cáo** dưới dạng danh sách có đánh số, **severity đứng ngay sau số** để user lọc nhanh:
+
+```
+#1 [Blocker] path/file.cs:42 — <vấn đề>. Đề xuất: <fix>
+#2 [Major]   path/file.cs:88 — <vấn đề>. Đề xuất: <fix>
+
+### Minor (không fix — user tự quyết)
+#3 [Minor]   path/file.cs:15 — <vấn đề>
+```
+
+Không có Blocker/Major → báo "Không có vấn đề chặn" rồi dừng.
 
 **Lưu ý — chọn đúng độ sâu (đừng kỳ vọng sai vào công cụ nhẹ)**:
 - Trigger này cố tình **lightweight** (inline, không spawn agent) → hợp để **liếc nhanh** đoạn vừa sửa. Dù đã nạp context + verify, nó vẫn nông hơn review chuyên sâu.
@@ -672,9 +682,10 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>  ❌ XÓA
 4. **Phân nhánh theo trạng thái comment**:
 
    **(A) MR CHƯA có comment review nào** → review mới hoàn toàn:
-   - Review toàn bộ diff theo tiêu chí ở mục "review the last change"
-   - Liệt kê issues `#1`, `#2`, ... mỗi issue có: file + dòng, vấn đề, đề xuất fix
-   - Đánh giá tổng thể: APPROVE / REQUEST_CHANGES / COMMENT
+   - Review toàn bộ diff theo tiêu chí Step 2 của mục "review the last change"
+   - ⚠️ **Mức này chỉ có text diff, KHÔNG đọc được full file** → không áp nguyên Step 3 ("chứng minh bằng code đã đọc") vì sẽ loại sạch mọi finding. Thay bằng: finding nào cần context ngoài diff thì ghi **"cần xác nhận"**, đừng khẳng định. Muốn chắc → checkout nhánh MR rồi `review the whole branch`
+   - Liệt kê issues `#1 [Severity] file:line — <vấn đề>. Đề xuất: <fix>`
+   - Verdict map thẳng từ severity: còn `Blocker`/`Major` → `REQUEST_CHANGES` · chỉ còn `Minor` → `COMMENT` · sạch → `APPROVE` (nói rõ "không có vấn đề chặn", không bịa Nit để có cái mà comment)
 
    **(B) MR ĐÃ có comment review trước đó** → review tiếp nối, KHÔNG review lại từ đầu:
    - Đọc kỹ comment cũ, trích xuất danh sách issue đã raise (`#1`, `#2`, ...) kèm verdict gần nhất
@@ -686,7 +697,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>  ❌ XÓA
      - `⚠️ Partially #N` — fix một phần, kèm điều còn thiếu
    - **Issue mới phát sinh từ commit mới**: đánh số tiếp theo (`#N+1`, `#N+2`, ...), không tái sử dụng số cũ
    - **KHÔNG** review lại các phần code không thay đổi từ lần review trước (trừ khi liên quan trực tiếp tới issue cũ)
-   - Đánh giá tổng thể dựa trên trạng thái mới: APPROVE nếu mọi issue cũ đã `✓ Resolved` và không có issue mới nghiêm trọng; REQUEST_CHANGES nếu còn `❌ Still open` hoặc có issue mới blocking; COMMENT cho các trường hợp còn lại
+   - Verdict: `APPROVE` nếu mọi `Blocker`/`Major` cũ đã `✓ Resolved` và không có `Blocker`/`Major` mới; `REQUEST_CHANGES` nếu còn `Blocker`/`Major` ở trạng thái `❌ Still open` hoặc mới phát sinh; `COMMENT` cho phần còn lại. ⚠️ **`Minor` chưa fix KHÔNG chặn `APPROVE`** — Minor theo thiết kế là không fix trong branch này, nếu tính vào thì MR treo vĩnh viễn
 5. Output format thống nhất:
    ```
    ## Review !<N> (lần thứ <K>)
@@ -699,7 +710,11 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>  ❌ XÓA
    - ⚠️ Partially #3 — <còn thiếu>
 
    ### Issue mới
-   - #N+1 `path/to/file.js:42` — <vấn đề>. Đề xuất: <fix>
+   - #N+1 [Blocker] `path/to/file.js:42` — <vấn đề>. Đề xuất: <fix>
+   - #N+2 [Major]   `path/to/file.js:88` — <vấn đề>. Đề xuất: <fix>
+
+   ### Minor (không chặn merge)
+   - #N+3 [Minor]   `path/to/file.js:15` — <vấn đề>
    ```
 
 ### "post review result to the MR"
