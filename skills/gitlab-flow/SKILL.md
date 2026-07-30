@@ -601,7 +601,14 @@ Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường
 1. Đợi cả 3 agent xong, gộp findings lại
 2. Fix trực tiếp trong working tree **chỉ `Blocker` + `Major`**. `Minor` gom vào mục riêng để user tự quyết, `Nit` bỏ. False positive thì skip, không cãi. Cả 3 agent trả rỗng → báo "Không có vấn đề chặn".
 3. **KHÔNG tự commit/push** — để user review changes rồi tự `commit and push` (sẽ hỏi xác nhận push như thường lệ)
-4. Tóm tắt: số issue đã fix, file đã đụng, status test/typecheck (nếu chạy)
+4. Tóm tắt theo đúng format này — `Minor` phải có chỗ đứng, nếu không item 2 nói "gom vào mục riêng" mà không có mục nào:
+   ```
+   Đã fix: <N> Blocker, <M> Major — <danh sách file>
+   Test/typecheck: <status>
+
+   ### Minor (không fix — user tự quyết)
+   #1 [Minor] path/file.cs:15 — <vấn đề>
+   ```
 5. Gợi ý bước tiếp: nếu có fix → `commit and push` rồi `create a merge request`; nếu không có gì cần sửa → `create a merge request` luôn
 
 **Lưu ý**:
