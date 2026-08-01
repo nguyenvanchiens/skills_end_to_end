@@ -85,7 +85,19 @@ Kỳ vọng đúng 4 dòng: `M README.md`, `M skills/TESTS.md`, `M skills/gitlab
 git diff | grep -iE "co-authored-by|generated with|claude\.com|noreply@anthropic"
 ```
 
-Kỳ vọng: **không output gì**. Có match ⇒ xoá dòng đó khỏi file trước khi commit.
+🚨 **ĐỌC TAY TỪNG MATCH — TUYỆT ĐỐI KHÔNG XOÁ HÀNG LOẠT.**
+
+Các skill trong repo này **dạy** quy tắc cấm AI attribution, nên chúng **phải chứa** các chuỗi đó làm ví dụ. Xoá chúng là phá chính bài học.
+
+| Match nằm ở đâu | Xử lý |
+|---|---|
+| Trong mục `**Ví dụ ... SAI**`, `**Ví dụ description SAI**`, hay bất kỳ block minh hoạ "đây là cái xấu" | **GIỮ NGUYÊN.** Xoá đi thì ví dụ SAI trở nên giống hệt ví dụ ĐÚNG và skill dạy ngược |
+| Trong câu rule (`🚫 KHÔNG chèn Co-Authored-By...`), bảng footer, checklist self-check | **GIỮ NGUYÊN.** Đó là nội dung rule |
+| Là một trailer thật ở cuối commit message, hoặc một dòng attribution thật lẫn vào văn bản | Xoá |
+
+`skills/TESTS.md` mục T1 đã ghi đúng cảnh báo này: *"Đọc tay: loại các match nằm trong mục 'Ví dụ commit message SAI' của skill (đó là minh hoạ, không phải output thật)."*
+
+Với đợt thay đổi này, **kỳ vọng đúng là: mọi match đều hợp lệ, không xoá dòng nào.** Nếu bạn định xoá bất kỳ dòng nào ⇒ DỪNG và hỏi controller.
 
 - [ ] **Step 3: Commit**
 
