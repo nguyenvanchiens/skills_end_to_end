@@ -108,6 +108,22 @@ Quy trình chuẩn cho một feature/bugfix mới. Có 2 vai trò: **Developer**
 
 > Ngoại lệ: Step 0 của `review change simplify` — user gõ `simplify` = chủ động yêu cầu dọn Minor, nên bước đó được auto-fix Minor.
 
+### Review lenses
+
+Danh mục lens dùng chung. Hai nơi tiêu thụ bảng này:
+
+- `review change simplify` (skill này) — dùng **2 lens cuối** (`Efficiency`, `Quality & Reuse`). Đây là pass dọn dẹp, không phải pass tìm bug.
+- `review the whole branch` (skill **`gitlab-review`**, chỉ Lead cài) — dùng **cả 4**, mỗi lens một agent.
+
+⚠️ Đây là **nguồn duy nhất** của định nghĩa lens. `gitlab-review` chép từng dòng vào prompt subagent chứ không giữ bản sao — sửa ở đây là sửa cho cả hai.
+
+| Lens | Tập trung | Severity chủ đạo | Flag điển hình |
+|---|---|---|---|
+| **Correctness / Task-fit** | Code có làm đúng task không | Blocker, Major | Lệch yêu cầu task, thiếu case so với spec, làm dư ngoài scope, edge case (null/empty/list rỗng/boundary/số âm/unicode), off-by-one, `catch` nuốt lỗi, state nửa vời khi throw giữa chừng, migration không idempotent, timezone/rounding |
+| **Security** | Lỗ hổng | Blocker | Thiếu input validation, authz/authn bypass (chặn ở UI mà không chặn ở API), SQL/command injection, path traversal, mass-assignment, secret/token/PII lộ ra log hay response, SSRF, CORS/cookie/session sai |
+| **Efficiency** | Performance / resource | Major | N+1, missed concurrency (independent ops chạy tuần tự), hot-path bloat, no-op updates trong polling loops, unnecessary existence checks (TOCTOU), unbounded memory, listener leak, overly broad reads |
+| **Quality & Reuse** | Code sạch / tái dùng | Minor | New function duplicates existing helper, inline logic could use existing util (string manipulation, path handling, env checks, type guards), redundant state, parameter sprawl, copy-paste với biến thể nhỏ, leaky abstraction, stringly-typed (raw strings nơi đã có enum/constant), unnecessary JSX nesting, nested conditionals 3+ levels, comment giải thích WHAT |
+
 ## Triggers & Procedures
 
 ### "create branch <name>" hoặc "create branch from task <TASK-ID>..."
@@ -217,7 +233,7 @@ Trigger match là lenient: thêm từ `simplify` bất kỳ vị trí trong câu
 
 1. Capture uncommitted + staged diff (`git diff` và `git diff --cached`). Empty → báo skip Step 0 và sang Step 1.
 
-2. Scan diff theo 2 góc nhìn **Quality & Reuse** + **Efficiency** — dùng chung danh sách flag ở 2 dòng cùng tên trong bảng Phase 2 của `review the whole branch` (xem section bên dưới). Bỏ qua 2 lens `Correctness` và `Security` ở bảng đó: đây là pass **dọn dẹp**, không phải pass tìm bug. Inline Claude, không spawn agent vì scope hẹp.
+2. Scan diff theo 2 lens **Efficiency** + **Quality & Reuse** — định nghĩa và danh sách flag xem mục **`Review lenses`** ở `Conventions`. Bỏ qua 2 lens `Correctness` và `Security`: đây là pass **dọn dẹp**, không phải pass tìm bug. Inline Claude, không spawn agent vì scope hẹp.
 
 3. **Auto-fix trực tiếp** mọi finding rõ ràng — false positive thì skip, không cãi, không hỏi user từng issue. Fix độc lập ở các file khác nhau → batch parallel trong 1 message.
 
@@ -604,12 +620,14 @@ Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường
 > 3. Hàm/API/schema bị đổi signature hoặc behavior: `Grep` tìm **mọi caller**, kể cả file KHÔNG nằm trong diff. Thay đổi trông an toàn trong diff vẫn có thể làm gãy caller ở nơi khác — đó là loại lỗi diff-only review không bao giờ thấy.
 > 4. Chỉ flag sau khi đã làm 1-3. Finding suy diễn từ diff là nguyên nhân #1 gây false positive.
 
-| Agent | Tập trung | Severity chủ đạo | Flag điển hình |
-|---|---|---|---|
-| **Correctness / Task-fit** | Code có làm đúng task không | Blocker, Major | Lệch yêu cầu task, thiếu case so với spec, làm dư ngoài scope, edge case (null/empty/list rỗng/boundary/số âm/unicode), off-by-one, `catch` nuốt lỗi, state nửa vời khi throw giữa chừng, migration không idempotent, timezone/rounding |
-| **Security** | Lỗ hổng | Blocker | Thiếu input validation, authz/authn bypass (chặn ở UI mà không chặn ở API), SQL/command injection, path traversal, mass-assignment, secret/token/PII lộ ra log hay response, SSRF, CORS/cookie/session sai |
-| **Efficiency** | Performance / resource | Major | N+1, missed concurrency (independent ops chạy tuần tự), hot-path bloat, no-op updates trong polling loops, unnecessary existence checks (TOCTOU), unbounded memory, listener leak, overly broad reads |
-| **Quality & Reuse** | Code sạch / tái dùng | Minor | New function duplicates existing helper, inline logic could use existing util (string manipulation, path handling, env checks, type guards), redundant state, parameter sprawl, copy-paste với biến thể nhỏ, leaky abstraction, stringly-typed (raw strings nơi đã có enum/constant), unnecessary JSX nesting, nested conditionals 3+ levels, comment giải thích WHAT |
+| Agent | Lens |
+|---|---|
+| Agent 1 | `Correctness / Task-fit` |
+| Agent 2 | `Security` |
+| Agent 3 | `Efficiency` |
+| Agent 4 | `Quality & Reuse` |
+
+Định nghĩa đầy đủ từng lens (Tập trung · Severity chủ đạo · Flag điển hình): xem **`Review lenses`** ở mục `Conventions`. **Chép nguyên văn dòng của lens tương ứng** vào prompt agent đó — subagent không thấy `Conventions`.
 
 > **Vì sao roster là 4 agent này**: `Blocker` theo bảng severity = "sai logic vs task, lỗ hổng security, mất data, crash" — nên **Correctness và Security là 2 agent bắt buộc**, chúng phụ trách đúng thứ duy nhất chặn merge. `Quality & Reuse` gộp làm 1 slot vì output của nó gần như toàn `Minor`, mà `Minor` thì không auto-fix — không đáng tách thành 2 agent.
 
