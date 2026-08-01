@@ -367,6 +367,8 @@ AdminGift consume qua HttpClient, cache 5 phút.
 feat(gift): bổ sung báo cáo POD theo miền (HNCW-317)
 
 <body>
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>   ← XÓA DÒNG NÀY
 ```
 
 **Quy trình self-check trước khi chạy `git commit`**:
@@ -703,6 +705,9 @@ Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường
 ## Related
 - HNCW-317
 
+---  ❌ XÓA
+🤖 Generated with [Claude Code](https://claude.com/claude-code)  ❌ XÓA
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>  ❌ XÓA
 ```
 
 ### "review the MR !<N>" (vai trò Reviewer)
