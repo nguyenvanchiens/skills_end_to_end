@@ -1,6 +1,6 @@
 ---
 name: gitlab-flow
-description: Standard end-to-end workflow for shipping a feature/bugfix from a Jira task to a GitLab MR. Use when the user references a Jira task ID (WRA-XX, etc.), asks to "start a task", "create branch from task", "rename branch", "review the last change" / "review change" (optionally with "simplify" keyword, e.g. "review change simplify", to auto-clean before review), "commit and push", "create a merge request", or "fix all issues". Reviewer-side triggers ("review the whole branch", "review the MR !N", "post review result to the MR", "merge the request") live in the add-on skill gitlab-review.
+description: Use when the user references a Jira task ID (WRA-40, HNCW-311, ...) or types "start a task", "create branch from task", "rename branch", "review the last change" / "review change" / "review change simplify", "commit and push" (± --quick), "create a merge request", "fix all issues" / "fix issue #N". NOT for the reviewer-side triggers "review the whole branch", "review the MR !N", "post review result to the MR", "merge the request" — those need the add-on skill gitlab-review.
 ---
 
 # GitLab Flow (Jira → Code → MR → Merge)

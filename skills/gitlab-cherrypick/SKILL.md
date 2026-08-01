@@ -1,6 +1,6 @@
 ---
 name: gitlab-cherrypick
-description: Cherry-pick commit từ nhánh tích hợp (`main`/`dev`) vào `release/<app>/<version>` của monorepo multi-app để cut patch release / backport fix. Use khi user nói "cherry-pick to release/<app>/<v>", "cherry-pick main vào release", "backport WRA-40 sang release", "đưa commit vào release", "list commit main 5 ngày", "list releases", "patch release", hoặc khi cần đưa fix/feature từ main sang release branch.
+description: Use khi user nói "cherry-pick to release/<app>/<v>", "cherry-pick main vào release", "backport WRA-40 sang release", "đưa commit vào release", "list releases", "list commit main 5 ngày", "patch release", hoặc khi cần đưa fix/feature đã land `main`/`dev` sang nhánh `release/<app>/<version>` đã cut. Áp dụng cho repo monorepo multi-app có release branch riêng theo app + version.
 ---
 
 # GitLab Cherry-pick (main → release/<app>/<version>)
@@ -163,7 +163,8 @@ Liệt kê commit trên nhánh tích hợp (`<source>`) trong N ngày qua — đ
 
 ```bash
 git fetch origin <source>
-git log origin/<source> --since="<N> days ago" --pretty=format:"%h|%an|%ad|%s" --date=short
+# --reverse BẮT BUỘC: git log mặc định in newest-first, ngược với bảng bên dưới
+git log origin/<source> --since="<N> days ago" --reverse --pretty=format:"%h|%an|%ad|%s" --date=short
 ```
 
 **Step 3 — Format đẹp cho user**:
@@ -243,8 +244,10 @@ git ls-remote --heads origin "refs/heads/release/<app>/<version>" | head -1
 
 ```bash
 # Commit có trên <source> nhưng KHÔNG có trên release target
+# --reverse BẮT BUỘC: số thứ tự `#` user pick phải chạy cũ → mới, khớp thứ tự
+# cherry-pick ở Step 5. Bỏ flag này = list newest-first = pick ngược chronological
 git log origin/<source> ^origin/release/<app>/<version> \
-    --since="<N> days ago" \
+    --since="<N> days ago" --reverse \
     --pretty=format:"%h|%an|%ad|%s" --date=short
 ```
 
@@ -311,7 +314,7 @@ git checkout -b cherry/main-to-release-gift-api-v0.5.3 origin/release/gift-api/v
 
 **Step 5 — Cherry-pick từng commit theo thứ tự chronological (cũ → mới)**:
 
-> Quan trọng: cherry-pick theo thứ tự **commit date ASC** (cũ nhất trước). Lý do: commit sau có thể depend on commit trước; pick ngược thứ tự sẽ tăng nguy cơ conflict.
+> Quan trọng: cherry-pick theo thứ tự **commit date ASC** (cũ nhất trước). Lý do: commit sau có thể depend on commit trước; pick ngược thứ tự sẽ tăng nguy cơ conflict. Danh sách ở Step 2 đã in sẵn đúng thứ tự này (nhờ `--reverse`) → giữ nguyên thứ tự số `#` user pick, đừng sắp lại.
 
 ```bash
 git cherry-pick -x <SHA1> <SHA2> <SHA3>

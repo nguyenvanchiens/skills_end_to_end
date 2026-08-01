@@ -1,6 +1,6 @@
 ---
 name: gitlab-sync
-description: Resolve conflict khi sync `main → builds/dev/<app>` để deploy QA trong GitLab flow của team. Hỗ trợ monorepo multi-app — mỗi app có nhánh `builds/dev/<app>` riêng (vd `portal-web-admin`, `gift-web-admin`, `gift-api`, `portal-api`...). Skill bắt buộc dùng nhánh trung gian `sync/*` để giữ nguyên tắc code chảy 1 chiều — KHÔNG bao giờ để code `builds/dev/*` chảy ngược vào `main`. Use khi user nói "sync main to dev-<app>", "sync main vào builds/dev", "resolve conflict builds/dev", "merge main vào build conflict", "tạo nhánh sync", "deploy QA bị conflict", "list build branches", "kiểm tra build hygiene", hoặc khi PR `main → builds/dev/*` bị conflict.
+description: Use khi user nói "sync main to dev-<app>", "sync main vào builds/dev", "resolve conflict builds/dev", "merge main vào build conflict", "tạo nhánh sync", "deploy QA bị conflict", "list build branches", "kiểm tra build hygiene" / "audit all dev builds", hoặc khi MR `main → builds/dev/<app>` bị conflict. Áp dụng cho repo monorepo multi-app, mỗi app một nhánh deploy QA riêng (`builds/dev/portal-web-admin`, `builds/dev/gift-api`...).
 ---
 
 # GitLab Sync (main → builds/dev/<app>)
