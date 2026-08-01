@@ -512,7 +512,7 @@ Nếu có tag pointing tới HEAD của release → warn user: "Release đã tag
 | Tình huống | Dùng skill |
 |---|---|
 | Feature mới từ Jira task → main | `gitlab-flow` |
-| Review/merge MR feature → main | `gitlab-flow` |
+| Review/merge MR feature → main | `gitlab-review` |
 | Sau feature merged, deploy QA (sync main → builds/dev) | `gitlab-sync` |
 | Audit builds/dev có sạch không | `gitlab-sync` (build hygiene) |
 | Backport fix/feature từ main → release để cut patch | `gitlab-cherrypick` (skill này) |

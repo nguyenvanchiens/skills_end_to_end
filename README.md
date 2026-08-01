@@ -6,77 +6,50 @@ Bộ skills GitLab workflow cho Claude Code và các AI coding harness khác. T�
 
 | Skill | Mô tả | License |
 |---|---|---|
-| [`gitlab-flow`](skills/gitlab-flow/) | Quy trình end-to-end Jira → branch → commit → MR → review → fix → merge dùng `glab`. Chuẩn hoá branch naming, commit format và safety rules cho team GitLab. Đã tích hợp toàn bộ spec của `commit` và `review-branch` qua các trigger `commit and push` và `review the whole branch`. | MIT |
+| [`gitlab-flow`](skills/gitlab-flow/) | Quy trình vai Developer: Jira → branch → code → review nhẹ → commit → MR → fix, dùng `glab`. Chuẩn hoá branch naming, commit format và safety rules cho team GitLab. Đã tích hợp toàn bộ spec của `commit` qua trigger `commit and push`. Phần vai Reviewer tách sang `gitlab-review`. | MIT |
+| [`gitlab-review`](skills/gitlab-review/) | **Add-on cho Lead** — vai Reviewer: `review the whole branch` (4 agent chuyên biệt + dedup/verify), `review the MR !N` (mức Grounded, đọc full file tại revision MR mà không cần checkout), `post review result to the MR`, `merge the request`. **Yêu cầu cài kèm `gitlab-flow`** — tham chiếu conventions của nó, không chép lại. | MIT |
 | [`gitlab-sync`](skills/gitlab-sync/) | Deploy QA cho monorepo multi-app: sync `main → builds/dev/<app>` qua nhánh trung gian `sync/*`, resolve conflict 1 chiều, audit build hygiene. **Chỉ Lead/Maintainer cần cài** — thành viên team không dùng thì không cài để giảm context. | MIT |
 | [`gitlab-cherrypick`](skills/gitlab-cherrypick/) | Cherry-pick commit từ `main` vào `release/<app>/<version>` để cut patch release / backport fix. Interactive: list commit main theo số ngày → user pick → cherry-pick qua nhánh `cherry/*` → MR về release branch. **Chỉ Lead/Maintainer cần cài**. | MIT |
 | [`commit`](skills/commit/) | ⚠️ **Deprecated** — spec đã gộp vào `gitlab-flow` (trigger `commit and push`) để tránh trùng lặp + 2 mô hình invoke. File chỉ còn là con trỏ. Dùng `commit and push` của `gitlab-flow` thay thế (kể cả khi không dùng `glab` — commit là local, push được gate). | MIT |
-| [`review-branch`](skills/review-branch/) | Review toàn bộ thay đổi của branch hiện tại so với base (committed + uncommitted) qua 4 agent song song: correctness/task-fit, security, efficiency, quality & reuse — verify findings rồi tự fix. Standalone — đã tích hợp trong `gitlab-flow`. | MIT |
+| [`review-branch`](skills/review-branch/) | ⚠️ **Deprecated** — gộp vào `gitlab-review`. File chỉ còn là con trỏ. | MIT |
 
 > **Recommendation**:
-> - **Thành viên team**: chỉ cài `gitlab-flow` là đủ cho 3 vai trò (workflow + commit + review).
-> - **Lead/Maintainer**: cài thêm `gitlab-sync` (deploy QA) + `gitlab-cherrypick` (patch release) tuỳ nhu cầu.
-> - `commit` đã deprecated (gộp vào `gitlab-flow`). Cài `review-branch` riêng chỉ khi không dùng GitLab/`glab`.
+> - **Thành viên team**: chỉ cài `gitlab-flow`. Bộ này ~5.250 từ; cài thêm phần Reviewer sẽ đội lên ~8.150 từ mỗi lần trigger mà bạn không dùng tới.
+> - **Lead/Maintainer**: `gitlab-flow` + `gitlab-review`, thêm `gitlab-sync` / `gitlab-cherrypick` tuỳ nhu cầu.
+> - `commit` và `review-branch` đã deprecated (gộp vào `gitlab-flow` / `gitlab-review`).
 
 ## Cài đặt
 
 Yêu cầu: Node.js (để dùng `npx`).
 
-### Cài `gitlab-flow` (recommended — đã bao gồm `commit` + `review-branch`)
+### 📦 Bộ Dev — mọi thành viên
 
 ```bash
 npx skills add nguyenvanchiens/skills_end_to_end -s gitlab-flow -y -a claude-code --copy
 ```
 
-### Cài thêm `gitlab-sync` (Lead/Maintainer)
+Đủ cho: tạo branch từ task → sinh code → review nhẹ → commit → mở MR → fix review.
 
-Chỉ Lead/Maintainer cần — dùng để sync `main → builds/dev/<app>` cho deploy QA monorepo multi-app:
+### 📦 Bộ Lead / Maintainer
 
 ```bash
+npx skills add nguyenvanchiens/skills_end_to_end -s gitlab-flow -y -a claude-code --copy
+npx skills add nguyenvanchiens/skills_end_to_end -s gitlab-review -y -a claude-code --copy
 npx skills add nguyenvanchiens/skills_end_to_end -s gitlab-sync -y -a claude-code --copy
-```
-
-### Cài thêm `gitlab-cherrypick` (Lead/Maintainer)
-
-Chỉ Lead/Maintainer cần — dùng để cherry-pick commit `main → release/<app>/<version>` cho cut patch release:
-
-```bash
 npx skills add nguyenvanchiens/skills_end_to_end -s gitlab-cherrypick -y -a claude-code --copy
 ```
 
-### Cài tất cả 5 skills
+⚠️ Dòng `gitlab-flow` **bắt buộc** — `gitlab-review` là add-on tham chiếu conventions của nó, cài thiếu sẽ hỏng ngầm.
 
-```bash
-npx skills add nguyenvanchiens/skills_end_to_end --all -a claude-code --copy
-```
-
-### Cài standalone `review-branch`
-
-Chỉ dùng nếu KHÔNG dùng GitLab/`glab` (skill `commit` đã deprecated — dùng `commit and push` của `gitlab-flow`):
-
-```bash
-npx skills add nguyenvanchiens/skills_end_to_end -s review-branch -y -a claude-code --copy
-```
-
-### Cài global (dùng cho mọi project)
-
-Thêm `-g` vào lệnh, ví dụ:
-
-```bash
-npx skills add nguyenvanchiens/skills_end_to_end -s gitlab-flow -y -g -a claude-code --copy
-```
+`gitlab-sync` (deploy QA) và `gitlab-cherrypick` (patch release) tuỳ nhu cầu, bỏ được.
 
 ### Cập nhật
 
 ```bash
-npx skills update         # cập nhật tất cả
-npx skills update -g      # chỉ global
+npx skills update
 ```
 
-### Gỡ cài đặt
-
-```bash
-npx skills remove
-```
+Chạy trong project. Cả hai skill về cùng một commit nên `gitlab-review` luôn khớp conventions của `gitlab-flow`.
 
 ## Hỗ trợ harness khác
 
@@ -152,7 +125,7 @@ Skill này không phải `/slash command` mà kích hoạt bằng **trigger phra
 
 | Vai | Plan | Làm gì khi review | Tránh |
 |---|---|---|---|
-| **Member (tác giả)** | Pro | Chỉ `review the last change` cho mỗi đoạn sửa (nhẹ, inline, 1 context) → commit → mở MR | **KHÔNG** chạy `review the whole branch` (4 agent — đốt token nhiều) |
+| **Member (tác giả)** | Pro | Chỉ `review the last change` cho mỗi đoạn sửa (nhẹ, inline, 1 context) → commit → mở MR | **KHÔNG** cài `gitlab-review` (4 agent — đốt token nhiều, và Lead đã lo phần này) |
 | **Reviewer chính** | Pro Max | Sau khi member mở MR, chạy `review the MR !<ID>` — mặc định chạy ở mức **Grounded**: `glab mr diff` + `git fetch` rồi đọc full file qua `git show FETCH_HEAD:<file>`, **không cần checkout**, không đụng working tree. MR quan trọng cần soi sâu → `glab mr checkout <ID>` rồi `review the whole branch` (4-agent) | — |
 
 **Nguyên tắc**: bước review nặng (4-agent) **chỉ chạy ở phía reviewer Pro Max** — token tính trên tài khoản đó, member Pro không ảnh hưởng. Member chỉ tốn token cho review inline hằng ngày.
@@ -346,3 +319,17 @@ Mỗi `SKILL.md` có frontmatter `name` + `description` để CLI `npx skills` t
 ## License
 
 MIT.
+
+## Skill installation hygiene
+
+> Rule cho Claude khi diagnose/fix vấn đề skill (stale, missing behavior, sync issue) — không liên quan workflow GitLab.
+
+🚫 **KHÔNG tự copy/sync skill file vào `C:\Users\<user>\.claude\skills\` (global) trừ khi user yêu cầu rõ ràng.** Cùng nguyên tắc cho mọi system-level location: `~/.claude/`, `%APPDATA%/Claude/`.
+
+**Default khi user báo skill bị stale/sai**:
+1. Verify trong repo `skills_end_to_end` đã có version đúng
+2. Gợi ý user chạy `npx skills update` trong project bị ảnh hưởng (KHÔNG `-g`)
+3. Gợi ý restart Claude session để load skill mới
+4. **Chỉ copy thủ công tới global NẾU user yêu cầu rõ** (vd "sync luôn global đi")
+
+**Lý do**: dual-location dễ tạo state lệch nhau; project-only là single source of truth; user có quyền chọn nơi cài, auto-touch global bypass quyền đó.

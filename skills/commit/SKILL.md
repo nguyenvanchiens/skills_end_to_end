@@ -14,7 +14,7 @@ description: Deprecated. The Conventional-Commits + Jira-ID spec moved into the 
   - Quick mode: `commit and push --quick`.
 - **TASK-ID** is taken automatically from the current branch name (`feature/WRA-9-...` → `WRA-9`).
 
-gitlab-flow's "Commit and push" section is **fully self-contained** — it carries everything that was here: repo-state probe, partial-staging guard, atomic check, `.commit-scopes` allowlist, the 11 allowed types, footers (`Closes`/`Refs`/`BREAKING CHANGE`), Quick mode, WIP/Spike, and revert format. Nothing was lost in the move.
+gitlab-flow's "Commit and push" trigger still covers everything that used to live here: the process (repo-state probe, partial-staging guard, atomic check) is inline in its `SKILL.md`, and the lookup tables — `.commit-scopes` allowlist, the 11 allowed types, footers (`Closes`/`Refs`/`BREAKING CHANGE`), Quick mode, WIP/Spike, and revert format — now live one hop away in [`skills/gitlab-flow/commit-reference.md`](../gitlab-flow/commit-reference.md). Nothing was lost in the move.
 
 ## Not using GitLab / `glab`?
 

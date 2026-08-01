@@ -435,8 +435,8 @@ Nếu sau này 1 trong các flow trên trở nên thường xuyên + hay conflic
 | Tình huống | Dùng skill |
 |---|---|
 | Feature mới từ Jira task → main | `gitlab-flow` |
-| Review MR feature → main | `gitlab-flow` |
-| Merge feature MR vào main | `gitlab-flow` |
+| Review MR feature → main | `gitlab-review` |
+| Merge feature MR vào main | `gitlab-review` |
 | Sau khi feature merged main, cần deploy QA | `gitlab-sync` (main → builds/dev/<app>) |
 | Kiểm tra builds/dev có sạch không | `gitlab-sync` (kiểm tra build hygiene) |
 
