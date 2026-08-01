@@ -1,0 +1,8 @@
+# Workspace scratch của superpowers subagent-driven-development
+# (ledger, task brief, report, review package — không phải nội dung repo)
+.superpowers/
+
+# Worktree cục bộ
+.worktrees/
+
+node_modules/
