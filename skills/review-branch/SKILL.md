@@ -16,13 +16,13 @@ npx skills add nguyenvanchiens/skills_end_to_end -s gitlab-flow -y -a claude-cod
 npx skills add nguyenvanchiens/skills_end_to_end -s gitlab-review -y -a claude-code --copy
 ```
 
-`gitlab-review` **depends on** `gitlab-flow` — install both. It reads the severity model, review lenses, base-branch rules, and output-language rules from `gitlab-flow` rather than copying them.
+`gitlab-review` **depends on** `gitlab-flow` — install both. Rather than copying them, it reads six things from `gitlab-flow`: the severity model, the review-lens catalogue, the base-branch rules, the output-language rules, the safety rules, and Steps 1-3 of `review the last change` (the grounding rubric its agent prompts are keyed to).
 
 Then type `review the whole branch`. The workflow is unchanged: four specialized agents in parallel → dedup + verify → auto-fix the `Blocker`/`Major` findings that survive verification.
 
 ## Not using GitLab / `glab`?
 
-`review the whole branch` only needs `git`. `glab` appears in one optional branch of base-branch detection, which you can skip. The other three `gitlab-review` triggers (`review the MR !N`, `post review result to the MR`, `merge the request`) do need `glab` — don't type them if you don't use GitLab.
+`review the whole branch` only needs `git`. `glab` shows up in two optional spots — resolving the base branch from an open MR, and pulling the task description from an MR — and you can skip both. The other three `gitlab-review` triggers (`review the MR !N`, `post review result to the MR`, `merge the request`) do need `glab` — don't type them if you don't use GitLab.
 
 ## If you want it gone entirely
 
