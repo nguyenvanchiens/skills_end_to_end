@@ -17,7 +17,8 @@
 - Commit format: `<type>(<scope>): <subject>` — **không có TASK-ID** (repo này không dùng Jira; 20 commit gần nhất đều không có).
 - Scope hợp lệ (từ `git log`): `gitlab-flow`, `readme`, `review`, `gitlab-cherrypick`, cộng scope mới `gitlab-review`.
 - 🚫 **Tuyệt đối không chèn `Co-Authored-By: Claude`, `🤖 Generated with`, hay bất kỳ AI attribution nào** vào commit message. Repo không track AI authorship.
-- Không đổi hành vi của bất kỳ trigger nào. Đây là restructure thuần — cùng một nội dung, chỗ khác.
+- Không đổi hành vi của bất kỳ trigger nào, **trừ những thay đổi bắt buộc do việc tách**: member cài bộ Dev không còn 4 trigger Lead, nên mọi hướng dẫn trỏ tới chúng phải nói đúng sự thật (kèm tên skill `gitlab-review`, hoặc "nhờ Lead chạy"). Ngoài phạm vi đó, đây là restructure thuần — cùng một nội dung, chỗ khác.
+- **Trùng lặp verbatim trong `gitlab-review` là CỐ Ý, đã được phán.** Hai block (severity + grounding) và dòng lens chép vào prompt subagent trùng với `Conventions` ở `gitlab-flow` — bắt buộc, vì subagent chạy context riêng và không thấy `Conventions`. Reviewer báo "trùng lặp logic block" ⇒ finding hợp lệ nhưng **plan thắng**; xử lý bằng dấu đồng bộ ở cả hai đầu, không bằng cách bỏ trùng.
 - Không nén/viết lại nội dung ở đợt này.
 - Mỗi task kết thúc bằng 1 commit.
 
@@ -474,32 +475,38 @@ EOF
 
 - [ ] **Step 1: Thay toàn bộ nội dung file**
 
+⚠️ **Tiếng Anh** — theo Global Constraints (giữ ngôn ngữ gốc của file) và theo tiền lệ `skills/commit/SKILL.md`, con trỏ deprecated cũng viết tiếng Anh.
+
 ```markdown
 ---
 name: review-branch
-description: Deprecated pointer. Use when someone invokes review-branch — the branch review workflow now lives in the gitlab-review skill.
+description: Deprecated pointer. Use when someone invokes review-branch — the whole-branch review workflow now lives in the gitlab-review skill.
 ---
 
-# review-branch — ⚠️ Deprecated
+# review-branch — moved into `gitlab-review`
 
-Nội dung đã gộp vào skill **`gitlab-review`** (trigger `review the whole branch`), cùng cách skill `commit` đã gộp vào `gitlab-flow`.
+> ⚠️ **Deprecated as a standalone skill.** The whole-branch review workflow that used to live here now lives in **one canonical place**: the `gitlab-review` skill, under the **`review the whole branch`** trigger. Same move the `commit` skill made into `gitlab-flow`.
 
-Giữ hai bản song song đã gây drift thật: bản này từng thiếu hẳn severity model trong khi `gitlab-flow` đã có từ commit `733261d`. Một nguồn duy nhất là cách chặn.
+Keeping two copies caused real drift: this file went without a severity model entirely while `gitlab-flow` had carried one since commit `733261d`, and a single fix later had to be applied twice, in two languages. One canonical home is the fix.
 
-## Dùng gì thay thế
+## Use this instead
 
 ```bash
 npx skills add nguyenvanchiens/skills_end_to_end -s gitlab-flow -y -a claude-code --copy
 npx skills add nguyenvanchiens/skills_end_to_end -s gitlab-review -y -a claude-code --copy
 ```
 
-`gitlab-review` **phụ thuộc** `gitlab-flow` — phải cài cả hai.
+`gitlab-review` **depends on** `gitlab-flow` — install both. It reads the severity model, review lenses, base-branch rules, and output-language rules from `gitlab-flow` rather than copying them.
 
-Rồi gõ `review the whole branch`. Quy trình y hệt: 4 agent chuyên biệt song song → dedup + verify → auto-fix `Blocker`/`Major` đã xác minh.
+Then type `review the whole branch`. The workflow is unchanged: four specialized agents in parallel → dedup + verify → auto-fix the `Blocker`/`Major` findings that survive verification.
 
-## Nếu bạn không dùng GitLab
+## Not using GitLab / `glab`?
 
-`review the whole branch` chỉ cần `git`; `glab` chỉ dùng ở một nhánh tuỳ chọn khi dò base branch, và bỏ qua được. Ba trigger còn lại của `gitlab-review` (`review the MR`, `post review result`, `merge the request`) mới cần `glab` — không dùng thì không gõ.
+`review the whole branch` only needs `git`. `glab` appears in one optional branch of base-branch detection, which you can skip. The other three `gitlab-review` triggers (`review the MR !N`, `post review result to the MR`, `merge the request`) do need `glab` — don't type them if you don't use GitLab.
+
+## If you want it gone entirely
+
+This file is a deliberate pointer, not the spec. To remove the standalone skill completely, delete the `skills/review-branch/` directory and drop its row from the README — nothing depends on it.
 ```
 
 - [ ] **Step 2: Verify frontmatter và độ dài**
