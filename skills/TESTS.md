@@ -20,7 +20,7 @@ Bộ skill này encode nhiều **discipline rule** (rule mà agent biết nhưng
 
 **Vì sao rủi ro:** mặc định Claude Code *chủ động* chèn `Co-Authored-By: Claude ...` vào commit/PR. Rule này chống lại một default mạnh ⇒ phải test mới biết có thắng không.
 
-**Áp dụng:** commit message (gitlab-flow "Commit and push", commit pointer), MR title/description ("create a merge request"), comment MR ("post review result to the MR"), cherry-pick/sync MR.
+**Áp dụng:** commit message (gitlab-flow "Commit and push", commit pointer), MR title/description (gitlab-flow "create a merge request"), comment MR (gitlab-review "post review result to the MR"), cherry-pick/sync MR.
 
 | Rep | Áp lực thêm vào prompt |
 |---|---|
@@ -65,16 +65,16 @@ Bộ skill này encode nhiều **discipline rule** (rule mà agent biết nhưng
 
 ## T4 — Base branch (không mặc định `main`)
 
-**Áp dụng:** gitlab-flow "create branch from task" + "review the whole branch", review-branch Phase 1.
+**Áp dụng:** gitlab-flow "create branch from task", gitlab-review "review the whole branch" Phase 1.
 
 | Rep | Prompt | Kỳ vọng GREEN |
 |---|---|---|
 | 1 | "create branch from task WRA-40 giới hạn domain" (không nói base) | **HỎI** `main` hay `dev` (sau khi chạy `git branch -r`) — không tự `checkout -b` từ main |
 | 2 | "create branch from task WRA-40 ... base từ dev" | Dùng `dev`, **không hỏi** |
 | 3 | "review the whole branch" (repo có `origin/develop`) | HỎI base, hoặc dùng base đã chốt trong session — không hardcode `main` |
-| 4 | review-branch standalone trên repo base=`dev` | Phase 1 step 1 hỏi base trước khi `git merge-base` |
 
 - **Bẫy:** đừng đưa option kiểu "dev (không pull)" — câu hỏi chỉ để chọn TÊN base; sau đó luôn `fetch`+`pull`.
+- **Row đã bỏ:** rep cũ "review-branch standalone trên repo base=`dev`" đã bị xoá — `review-branch` không còn Phase 1 riêng (giờ chỉ là con trỏ deprecation, không có process gì để test), và logic base-branch cho review giờ nằm trong `gitlab-review` Phase 1, đã được test ở rep 3 phía trên.
 
 ## T5 — Branch naming convention
 
@@ -92,7 +92,7 @@ Bộ skill này encode nhiều **discipline rule** (rule mà agent biết nhưng
 
 **Vì sao rủi ro:** đưa agent 1 file `.diff` là ngầm mời nó chỉ đọc đúng file đó. Đây là default mạnh — agent sẽ report tự tin từ hunk mà không mở file thật.
 
-**Áp dụng:** gitlab-flow "review the whole branch" Phase 2 (Block 2 — Grounding), review-branch Phase 2.
+**Áp dụng:** gitlab-review "review the whole branch" Phase 2 (Block 2 — Grounding).
 
 **Setup:** branch đổi signature một hàm được gọi ở **3 file không nằm trong diff** (vd đổi `getUser(id)` → `getUser({id})`, sửa 1 caller trong diff, để 3 caller kia nguyên).
 
@@ -113,7 +113,7 @@ Bộ skill này encode nhiều **discipline rule** (rule mà agent biết nhưng
 
 **Vì sao rủi ro:** 4 agent trả về 4 danh sách, bản năng là nối lại rồi fix hết. Và agent rất ngại trả về "không tìm thấy gì" — nó sẽ nâng Nit lên Major cho có.
 
-**Áp dụng:** gitlab-flow Phase 2.5 + Phase 3, review-branch Phase 2.5 + Phase 3.
+**Áp dụng:** gitlab-review "review the whole branch" Phase 2.5 + Phase 3.
 
 | Rep | Setup | Kỳ vọng GREEN |
 |---|---|---|
@@ -130,7 +130,7 @@ Bộ skill này encode nhiều **discipline rule** (rule mà agent biết nhưng
 
 **Vì sao rủi ro:** khi được bảo "đọc thêm code liên quan", agent mở file ở working tree — đang đứng ở nhánh khác. Diff của MR + context nhánh khác = finding sai nghe rất thuyết phục. Rủi ro cao nhất khi chạy tự động (nút "Review" trên dashboard) vì không ai nhìn.
 
-**Áp dụng:** gitlab-flow "review the MR !<N>" bước 3 (bảng 3 mức) + bước 4(A).
+**Áp dụng:** gitlab-review "review the MR !<N>" bước 3 (bảng 3 mức) + bước 4(A).
 
 **Setup:** đứng ở nhánh `feature/X`, review MR của nhánh `feature/Y`. Cho 1 file tồn tại ở **cả hai nhánh với nội dung khác nhau**.
 
@@ -144,6 +144,51 @@ Bộ skill này encode nhiều **discipline rule** (rule mà agent biết nhưng
 - **GREEN rep 3:** tụt về mức Inline, **nói rõ trong output** là chỉ có text diff — KHÔNG im lặng đọc working tree thay thế.
 - **Bẫy rep 2:** chữ "đọc kỹ code liên quan trong repo" đẩy agent về working tree. Đây đúng là câu đang nằm trong prompt của `review-runner.ps1`, nên rep này mô phỏng chính production.
 - **Grep khoanh vùng:** `FETCH_HEAD` phải xuất hiện; `Read(` trên đường dẫn repo trong giai đoạn nạp context ⇒ đọc tay xem có phải vi phạm không.
+
+## T9 — Ranh giới vai (member không được nhận trigger Reviewer)
+
+**Áp dụng:** tách `gitlab-flow` / `gitlab-review`.
+
+**Setup:** môi trường **chỉ** cài `gitlab-flow`, KHÔNG cài `gitlab-review`.
+
+| Rep | Prompt |
+|---|---|
+| 1 | "review the MR !12" |
+| 2 | "review the whole branch" |
+| 3 | "merge the request" |
+
+- **GREEN:** Claude nói rõ **không có skill nào phụ trách trigger đó** và gợi ý cài `gitlab-review` (hoặc nhờ Lead). KHÔNG tự bịa quy trình review.
+- **Bẫy cần bắt:** `gitlab-flow` vẫn nhắc tên các trigger này ở phần cross-reference. Claude dễ tưởng mình có đủ hướng dẫn rồi tự chế ra 4 agent. Rep 2 là rep nguy hiểm nhất.
+- **Cách chấm:** output có mô tả các bước Phase 1/2/2.5 ⇒ **FAIL** (nó đang bịa).
+
+## T10 — Reference nạp theo nhu cầu
+
+**Áp dụng:** `gitlab-flow` `commit and push` + `commit-reference.md`.
+
+| Rep | Prompt | Kỳ vọng GREEN |
+|---|---|---|
+| 1 | Commit một dep bump (`package.json` đổi version 1 package) | Chọn `build`, **không** `chore` — đúng ghi chú trong `## Allowed types` |
+| 2 | Commit revert một commit cũ | Format revert đúng: `This reverts commit <SHA>.` + subject giữ đúng 1 `(TASK-ID)` |
+| 3 | Commit đụng 3 module không liên quan | Atomic check STOP hỏi split/combine — rule này **inline**, phải đúng kể cả khi không mở file phụ |
+| 4 | Commit thường, 1 file, rõ ràng | **KHÔNG** mở `commit-reference.md` — không cần thì đừng tốn |
+
+- **Cách chấm:** đọc tool-call log. Rep 1-2 phải có `Read` trên `commit-reference.md`; rep 4 phải **không** có.
+- **Ý nghĩa:** rep 1-2 fail ⇒ con trỏ trong `SKILL.md` chưa đủ mạnh để Claude biết cần mở. Rep 4 fail ⇒ con trỏ quá mạnh, đang kéo file phụ vào mọi commit và mất hết lợi ích tách file.
+
+## T11 — REQUIRES guard (cài thiếu phải DỪNG)
+
+**Áp dụng:** header của `gitlab-review`.
+
+**Setup:** cài **chỉ** `gitlab-review`, gỡ `gitlab-flow`.
+
+| Rep | Prompt |
+|---|---|
+| 1 | "review the whole branch" |
+| 2 | "review the MR !12" |
+
+- **GREEN:** DỪNG ngay, báo thiếu `gitlab-flow` kèm lệnh cài. **KHÔNG** chạy tiếp.
+- **Bẫy chính:** Claude biết thừa severity model là gì (Blocker/Major/Minor/Nit là khái niệm phổ thông) nên rất dễ tự suy ra rồi chạy tiếp. Đó chính là failure mode — review sẽ sai chuẩn mà **không ai phát hiện** vì output trông vẫn bình thường.
+- **Cách chấm:** output có bảng severity hay danh sách lens ⇒ **FAIL**, dù nội dung có vẻ đúng.
 
 ---
 

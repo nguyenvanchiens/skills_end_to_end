@@ -308,6 +308,7 @@ Xem chi tiết đầy đủ ở [`skills/gitlab-cherrypick/SKILL.md`](skills/git
 skills_end_to_end/
 ├── README.md
 └── skills/
+    ├── TESTS.md
     ├── gitlab-flow/
     │   ├── SKILL.md
     │   └── commit-reference.md
