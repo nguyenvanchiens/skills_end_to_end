@@ -10,7 +10,7 @@ Bộ skills GitLab workflow cho Claude Code và các AI coding harness khác. T�
 | [`gitlab-sync`](skills/gitlab-sync/) | Deploy QA cho monorepo multi-app: sync `main → builds/dev/<app>` qua nhánh trung gian `sync/*`, resolve conflict 1 chiều, audit build hygiene. **Chỉ Lead/Maintainer cần cài** — thành viên team không dùng thì không cài để giảm context. | MIT |
 | [`gitlab-cherrypick`](skills/gitlab-cherrypick/) | Cherry-pick commit từ `main` vào `release/<app>/<version>` để cut patch release / backport fix. Interactive: list commit main theo số ngày → user pick → cherry-pick qua nhánh `cherry/*` → MR về release branch. **Chỉ Lead/Maintainer cần cài**. | MIT |
 | [`commit`](skills/commit/) | ⚠️ **Deprecated** — spec đã gộp vào `gitlab-flow` (trigger `commit and push`) để tránh trùng lặp + 2 mô hình invoke. File chỉ còn là con trỏ. Dùng `commit and push` của `gitlab-flow` thay thế (kể cả khi không dùng `glab` — commit là local, push được gate). | MIT |
-| [`review-branch`](skills/review-branch/) | Review toàn bộ thay đổi của branch hiện tại so với `main` (committed + uncommitted) qua 3 agent song song: reuse, quality, efficiency — rồi tự fix issue. Standalone — đã tích hợp trong `gitlab-flow`. | MIT |
+| [`review-branch`](skills/review-branch/) | Review toàn bộ thay đổi của branch hiện tại so với base (committed + uncommitted) qua 4 agent song song: correctness/task-fit, security, efficiency, quality & reuse — verify findings rồi tự fix. Standalone — đã tích hợp trong `gitlab-flow`. | MIT |
 
 > **Recommendation**:
 > - **Thành viên team**: chỉ cài `gitlab-flow` là đủ cho 3 vai trò (workflow + commit + review).
@@ -110,8 +110,8 @@ Skill này không phải `/slash command` mà kích hoạt bằng **trigger phra
 | **rename branch &lt;new-name&gt;** | Đổi tên branch hiện tại đồng bộ local + remote. Detect upstream → nếu chưa push: rename thuần. Đã push: rename local + push tên mới + hỏi xóa branch cũ trên remote. Tránh tình trạng local≠remote name làm hỏng push/MR sau đó |
 | (paste mô tả task Jira) | Đọc scope, sinh code theo convention project |
 | **review the last change** / **review change** | Soi diff gần nhất: **đọc full file đã đổi + CLAUDE.md/file lân cận + task** để ground (không review diff "ống hút"), **verify lọc false positive**, rồi list issues `#1`, `#2`... kèm `file:line`. Inline (nhẹ) — diff lớn/cần sâu → `review the whole branch` hoặc `/code-review` |
-| **review change simplify** (thêm "simplify" bất kỳ vị trí) | Auto-fix mechanical issues (Reuse/Quality/Efficiency) trước, rồi list review issues |
-| **review the whole branch** | Review cumulative branch vs `<base>` (main/dev đã chốt lúc tạo branch) qua 3 agent song song (Reuse / Quality / Efficiency), tự fix issues. **Macro review** trước khi commit cuối / mở MR. |
+| **review change simplify** (thêm "simplify" bất kỳ vị trí) | Auto-fix mechanical issues (Quality & Reuse + Efficiency) trước, rồi list review issues |
+| **review the whole branch** | Review cumulative branch vs `<base>` (main/dev đã chốt lúc tạo branch) qua **4 agent song song** (Correctness/Task-fit · Security · Efficiency · Quality & Reuse), mỗi agent bắt buộc đọc full file + truy caller, rồi **dedup + verify** trước khi auto-fix `Blocker`/`Major`. **Macro review** trước khi commit cuối / mở MR. |
 | **commit and push** (kèm `--quick` nếu cần) | Self-contained — kế thừa toàn bộ spec commit: probe repo, partial-staging guard, atomic check, `.commit-scopes` allowlist, 11 types, footer (`Closes`/`Refs`...), Quick mode, WIP/Spike, revert format. TASK-ID tự lấy từ tên nhánh. Commit local xong **HỎI user** có push không (**không tự push** dù tên trigger có "push"). Detect upstream tracking — nếu local branch khác upstream (rename scenario) → STOP, hướng user qua `rename branch`. (Skill `commit` riêng đã deprecated — dùng trigger này.) |
 | **create a merge request** | Xác định **target branch** trước: nếu đã chốt base trong session thì dùng, **chưa biết (vd MR ở session khác) → HỎI `main` hay `dev`**, không mặc định `main`. Rồi `glab mr create --target-branch <base>` với title/description chuẩn |
 | **review the MR !&lt;N&gt;** | Lấy `glab mr diff <N>` + comment đã có. **MR chưa có comment** → review mới, list issues + verdict. **MR đã có comment** → review tiếp nối: đối chiếu issue cũ (`✓ Resolved` / `❌ Still open` / `⚠️ Partially`) + chỉ review commit mới push thêm |
@@ -152,16 +152,16 @@ Skill này không phải `/slash command` mà kích hoạt bằng **trigger phra
 
 | Vai | Plan | Làm gì khi review | Tránh |
 |---|---|---|---|
-| **Member (tác giả)** | Pro | Chỉ `review the last change` cho mỗi đoạn sửa (nhẹ, inline, 1 context) → commit → mở MR | **KHÔNG** chạy `review the whole branch` (3 agent — đốt token nhiều) |
-| **Reviewer chính** | Pro Max | Sau khi member mở MR, chạy `review the MR !<ID>` (full diff MR, **không cần checkout** — kéo diff qua `glab mr diff`). MR quan trọng cần soi sâu → `glab mr checkout <ID>` rồi `review the whole branch` (3-agent) | — |
+| **Member (tác giả)** | Pro | Chỉ `review the last change` cho mỗi đoạn sửa (nhẹ, inline, 1 context) → commit → mở MR | **KHÔNG** chạy `review the whole branch` (4 agent — đốt token nhiều) |
+| **Reviewer chính** | Pro Max | Sau khi member mở MR, chạy `review the MR !<ID>` — mặc định chạy ở mức **Grounded**: `glab mr diff` + `git fetch` rồi đọc full file qua `git show FETCH_HEAD:<file>`, **không cần checkout**, không đụng working tree. MR quan trọng cần soi sâu → `glab mr checkout <ID>` rồi `review the whole branch` (4-agent) | — |
 
-**Nguyên tắc**: bước review nặng (3-agent) **chỉ chạy ở phía reviewer Pro Max** — token tính trên tài khoản đó, member Pro không ảnh hưởng. Member chỉ tốn token cho review inline hằng ngày.
+**Nguyên tắc**: bước review nặng (4-agent) **chỉ chạy ở phía reviewer Pro Max** — token tính trên tài khoản đó, member Pro không ảnh hưởng. Member chỉ tốn token cho review inline hằng ngày.
 
-> ⚠️ `review the MR !<ID>` chạy được mà không cần đứng trên nhánh MR vì nó review *text diff* từ remote (inline depth). Muốn soi SÂU (3-agent đọc full file) thì **phải đứng trên nhánh source của MR trước** — checkout bằng tool nào cũng được (`glab mr checkout <ID>`, `git checkout <branch>`, hay **SourceTree/GUI**); skill chỉ cần HEAD đang ở đúng nhánh. `review the whole branch` và `/code-review` đọc code local, không soi được remote MR khi bạn đang ở nhánh khác.
+> ⚠️ `review the MR !<ID>` chạy được mà **không cần đứng trên nhánh MR**. Mặc định nó chạy ở mức **Grounded**: `glab mr diff` lấy diff, rồi `git fetch origin <source-branch>` + `git show FETCH_HEAD:<file>` để đọc **full file tại đúng revision của MR** — không đụng working tree, nên bạn vẫn code dở ở nhánh khác được. Muốn soi SÂU hơn (4-agent ensemble + verify) thì **phải đứng trên nhánh source của MR trước** — checkout bằng tool nào cũng được (`glab mr checkout <ID>`, `git checkout <branch>`, hay **SourceTree/GUI**); skill chỉ cần HEAD đang ở đúng nhánh. `review the whole branch` và `/code-review` đọc code local, không soi được remote MR khi bạn đang ở nhánh khác.
 >
 > **Base khi deep-review = target branch của MR** (`glab mr view <ID>`), không cần nhớ/đoán `main` hay `dev`: dự án main-chính → MR target `main`, dự án dev-chính → target `dev`. Skill tự đọc target từ MR.
 
-> Lý do bỏ được `review the whole branch` ở phía member: lượt `review the MR !<ID>` của reviewer đã soát toàn bộ diff MR (full coverage). Member review sớm bằng `review the last change` chỉ để bắt lỗi rẻ ngay khi code, không cần lượt 3-agent.
+> Lý do bỏ được `review the whole branch` ở phía member: lượt `review the MR !<ID>` của reviewer đã soát toàn bộ diff MR (full coverage). Member review sớm bằng `review the last change` chỉ để bắt lỗi rẻ ngay khi code, không cần lượt 4-agent.
 
 ### Review output
 

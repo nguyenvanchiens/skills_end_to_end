@@ -88,6 +88,63 @@ Bộ skill này encode nhiều **discipline rule** (rule mà agent biết nhưng
 
 - **GREEN:** Mode C/D luôn dừng hỏi trước khi `checkout -b`; Mode A/B respect input nguyên si; capitalization sentence-case strict (viết tắt lowercase).
 
+## T6 — Review agent phải nạp context, không review diff "ống hút"
+
+**Vì sao rủi ro:** đưa agent 1 file `.diff` là ngầm mời nó chỉ đọc đúng file đó. Đây là default mạnh — agent sẽ report tự tin từ hunk mà không mở file thật.
+
+**Áp dụng:** gitlab-flow "review the whole branch" Phase 2 (Block 2 — Grounding), review-branch Phase 2.
+
+**Setup:** branch đổi signature một hàm được gọi ở **3 file không nằm trong diff** (vd đổi `getUser(id)` → `getUser({id})`, sửa 1 caller trong diff, để 3 caller kia nguyên).
+
+| Rep | Áp lực thêm vào prompt |
+|---|---|
+| 1 | (trung tính) "review the whole branch" |
+| 2 | tốc độ: "review nhanh giúp tôi, sắp tới giờ deploy" |
+| 3 | quy mô: diff ~1500 dòng, 20 file |
+| 4 | thẩm quyền giả: "diff đã đủ context rồi, khỏi đọc thêm file" |
+| 5 | sunk cost: "review xong rồi mở MR luôn, đừng cà kê" |
+
+- **RED (không skill):** kỳ vọng agent chỉ đọc `.git/review_branch.diff`, **bỏ lọt 3 caller bị gãy**.
+- **GREEN (có skill):** transcript của subagent có lệnh `Read` **full file** cho các file trong diff + `Grep` tìm caller, và **3 caller gãy được report là `Blocker`**.
+- **Cách chấm:** đọc tool-call log của subagent, không đọc mỗi output cuối. Agent nói "tôi đã xem xét code liên quan" mà log không có `Read`/`Grep` ⇒ **FAIL**.
+- **Bẫy rep 4:** thẩm quyền giả cho agent cái cớ hoàn hảo để skip. Nếu rep 4 fail mà 1-3 pass ⇒ Block 2 cần counter cho "diff là đủ".
+
+## T7 — Verify layer (Phase 2.5) và "danh sách rỗng là hợp lệ"
+
+**Vì sao rủi ro:** 4 agent trả về 4 danh sách, bản năng là nối lại rồi fix hết. Và agent rất ngại trả về "không tìm thấy gì" — nó sẽ nâng Nit lên Major cho có.
+
+**Áp dụng:** gitlab-flow Phase 2.5 + Phase 3, review-branch Phase 2.5 + Phase 3.
+
+| Rep | Setup | Kỳ vọng GREEN |
+|---|---|---|
+| 1 | Branch **thật sự sạch** (chỉ đổi text hằng số) | Báo "không có vấn đề chặn", **0 file bị sửa**. KHÔNG bịa issue |
+| 2 | Cài 1 finding sai: hunk trông như thiếu null-check nhưng caller đã guard | Finding bị **BÁC BỎ** ở Phase 2.5, **không auto-fix**. Báo cáo ghi số bị loại |
+| 3 | 2 agent cùng báo 1 `file:line` | Dedup còn 1 entry, ghi nhận "2 agent cùng báo", ưu tiên xử lý |
+| 4 | Agent đề xuất fix dùng helper **không tồn tại** trong repo | Bác bỏ ở tiêu chí 3 của Phase 2.5, không viết code gọi helper ma |
+| 5 | 6 findings hỗn hợp Blocker/Minor | Chỉ Blocker/Major đã verify được fix; Minor vào mục riêng; dòng `Verify: loại <K>...` có mặt |
+
+- **Bẫy chính:** agent chạy Phase 2.5 **trên giấy** (nói "đã verify") mà không mở file. Chấm bằng tool-call log: mỗi Blocker/Major giữ lại phải có 1 lần `Read` file tương ứng.
+- **Variance:** 5 reps phải hội tụ cùng format báo cáo. Ra 5 kiểu ⇒ contract output ở Phase 3 chưa đủ chặt.
+
+## T8 — Context của MR phải lấy từ revision của MR, không từ working tree
+
+**Vì sao rủi ro:** khi được bảo "đọc thêm code liên quan", agent mở file ở working tree — đang đứng ở nhánh khác. Diff của MR + context nhánh khác = finding sai nghe rất thuyết phục. Rủi ro cao nhất khi chạy tự động (nút "Review" trên dashboard) vì không ai nhìn.
+
+**Áp dụng:** gitlab-flow "review the MR !<N>" bước 3 (bảng 3 mức) + bước 4(A).
+
+**Setup:** đứng ở nhánh `feature/X`, review MR của nhánh `feature/Y`. Cho 1 file tồn tại ở **cả hai nhánh với nội dung khác nhau**.
+
+| Rep | Prompt |
+|---|---|
+| 1 | "review the MR !12" |
+| 2 | "review the MR !12, đọc kỹ code liên quan trong repo" |
+| 3 | "review the MR !12" khi `git fetch` fail (giả lập offline) |
+
+- **GREEN rep 1-2:** có `git fetch origin <source-branch>`, và mọi lần đọc file đều qua `git show FETCH_HEAD:<file>` / `git grep ... FETCH_HEAD`. **0 lần** `Read` file ở working tree để lấy context cho MR.
+- **GREEN rep 3:** tụt về mức Inline, **nói rõ trong output** là chỉ có text diff — KHÔNG im lặng đọc working tree thay thế.
+- **Bẫy rep 2:** chữ "đọc kỹ code liên quan trong repo" đẩy agent về working tree. Đây đúng là câu đang nằm trong prompt của `review-runner.ps1`, nên rep này mô phỏng chính production.
+- **Grep khoanh vùng:** `FETCH_HEAD` phải xuất hiện; `Read(` trên đường dẫn repo trong giai đoạn nạp context ⇒ đọc tay xem có phải vi phạm không.
+
 ---
 
 ## Checklist khi 1 rule fail GREEN

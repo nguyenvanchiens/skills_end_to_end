@@ -77,7 +77,7 @@ Quy trình chuẩn cho một feature/bugfix mới. Có 2 vai trò: **Developer**
 | Áp dụng cho | Phần phải tiếng Việt |
 |---|---|
 | `review the last change` / `review change` (± simplify) | Tóm tắt Step 0 simplify pass + danh sách issue `#1`, `#2`... (vấn đề + đề xuất fix) |
-| `review the whole branch` | Tóm tắt aggregate từ 3 agent + danh sách fix đã làm + status test/typecheck |
+| `review the whole branch` | Tóm tắt aggregate từ 4 agent + kết quả verify + danh sách fix đã làm + status test/typecheck |
 | `review the MR !<N>` | Verdict + danh sách issue (cả "trạng thái issue cũ" và "issue mới") |
 | `post review result to the MR` | Nội dung Markdown comment đăng lên GitLab |
 | Tóm tắt sau `fix all issues` | Danh sách issue đã fix + đề xuất commit message |
@@ -217,7 +217,7 @@ Trigger match là lenient: thêm từ `simplify` bất kỳ vị trí trong câu
 
 1. Capture uncommitted + staged diff (`git diff` và `git diff --cached`). Empty → báo skip Step 0 và sang Step 1.
 
-2. Scan diff theo 3 góc nhìn **Reuse / Quality / Efficiency** — danh sách flag chi tiết dùng chung với bảng Phase 2 của `review the whole branch` (xem section bên dưới). Inline Claude, không spawn agent vì scope hẹp.
+2. Scan diff theo 2 góc nhìn **Quality & Reuse** + **Efficiency** — dùng chung danh sách flag ở 2 dòng cùng tên trong bảng Phase 2 của `review the whole branch` (xem section bên dưới). Bỏ qua 2 lens `Correctness` và `Security` ở bảng đó: đây là pass **dọn dẹp**, không phải pass tìm bug. Inline Claude, không spawn agent vì scope hẹp.
 
 3. **Auto-fix trực tiếp** mọi finding rõ ràng — false positive thì skip, không cãi, không hỏi user từng issue. Fix độc lập ở các file khác nhau → batch parallel trong 1 message.
 
@@ -259,7 +259,7 @@ Không có Blocker/Major → báo "Không có vấn đề chặn" rồi dừng.
 
 **Lưu ý — chọn đúng độ sâu (đừng kỳ vọng sai vào công cụ nhẹ)**:
 - Trigger này cố tình **lightweight** (inline, không spawn agent) → hợp để **liếc nhanh** đoạn vừa sửa. Dù đã nạp context + verify, nó vẫn nông hơn review chuyên sâu.
-- Muốn **chính xác/sâu hơn**: dùng skill built-in **`/code-review`** (đọc file thật + adversarial verify, loại false positive mạnh hơn) hoặc trigger **`review the whole branch`** (3 agent song song đọc full file).
+- Muốn **chính xác/sâu hơn**: dùng skill built-in **`/code-review`** (đọc file thật + adversarial verify, loại false positive mạnh hơn) hoặc trigger **`review the whole branch`** (4 agent chuyên biệt song song đọc full file + tầng verify).
 - Diff lớn (>500 dòng) hoặc nhiều commit → **bắt buộc** chuyển sang `review the whole branch`, đừng cố review inline.
 
 ### "Commit and push"
@@ -367,8 +367,6 @@ AdminGift consume qua HttpClient, cache 5 phút.
 feat(gift): bổ sung báo cáo POD theo miền (HNCW-317)
 
 <body>
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>   ← XÓA DÒNG NÀY
 ```
 
 **Quy trình self-check trước khi chạy `git commit`**:
@@ -553,7 +551,7 @@ Refs WRA-201
 
 ### "review the whole branch" (review cumulative trước khi mở MR)
 
-Review TOÀN BỘ thay đổi của branch hiện tại so với `<base>` (cách xác định ở Phase 1 — KHÔNG mặc định `main`) — committed + uncommitted — qua 3 agent song song, rồi tự fix issues. Khác `review the last change` ở điểm: nhìn cumulative diff (nhiều commit), 3 góc nhìn chuyên sâu, auto-fix các issue rõ ràng.
+Review TOÀN BỘ thay đổi của branch hiện tại so với `<base>` (cách xác định ở Phase 1 — KHÔNG mặc định `main`) — committed + uncommitted — qua 4 agent chuyên biệt song song, verify findings, rồi tự fix. Khác `review the last change` ở điểm: nhìn cumulative diff (nhiều commit), 4 góc nhìn chuyên sâu, có tầng verify, auto-fix các issue đã xác minh.
 
 **Khi nào dùng**: sau khi đã có nhiều commit và push chính, **trước khi `create a merge request`**. Output có thể tạo thêm changes → cần thêm 1 lượt `commit and push` nữa rồi mới mở MR. Bỏ qua bước này nếu branch chỉ 1 commit nhỏ — `review the last change` là đủ.
 
@@ -581,35 +579,69 @@ Review TOÀN BỘ thay đổi của branch hiện tại so với `<base>` (cách
    ```bash
    git diff --stat "$BASE"
    ```
+6. **Nạp task context** — không có bước này thì agent Correctness ở Phase 2 vô nghĩa (không có chuẩn nào để đối chiếu "đúng/sai"):
+   - Extract TASK-ID từ tên branch (pattern `[A-Z][A-Z0-9]+-\d+`)
+   - Lấy mô tả task, thứ tự ưu tiên dừng ở match đầu: mô tả đã có trong hội thoại → description của MR nếu branch đã mở MR (`glab mr view`) → **HỎI user 1 câu ngắn**: "Task `<TASK-ID>` yêu cầu gì? (1-2 câu là đủ)"
+   - Không lấy được (user bỏ qua) → vẫn chạy Phase 2, nhưng **nói rõ với user**: "thiếu task context — agent Correctness chỉ xét self-consistency, không phán được logic có khớp yêu cầu hay không"
 
-**Phase 2 — Launch 3 agent SONG SONG** (1 message, 3 Agent tool calls):
+**Phase 2 — Launch 4 agent SONG SONG** (1 message, 4 Agent tool calls):
 
-Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường dẫn new-files (`.git/review_branch_new.txt`) + context "cumulative diff branch <name> against <base>".
+Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường dẫn new-files (`.git/review_branch_new.txt`) + context "cumulative diff branch <name> against <base>" + mô tả task từ Phase 1 bước 6.
 
-⚠️ **Bắt buộc chép nguyên văn vào prompt của cả 3 agent** — subagent chạy context riêng, KHÔNG thấy mục Review output ở Conventions:
+⚠️ **Bắt buộc chép nguyên văn CẢ HAI block dưới vào prompt của cả 4 agent** — subagent chạy context riêng, KHÔNG thấy mục Review output ở Conventions, KHÔNG thấy Step 1 của `review the last change`:
+
+**Block 1 — Severity:**
 
 > Gán severity cho mọi finding: `Blocker` (sai logic/security/mất data/crash) · `Major` (edge case thật, N+1 hot path, race) · `Minor` (naming, code thừa) · `Nit` (style — bỏ, đừng báo). Mỗi finding phải có `file:line` + trích code chứng minh, không suy diễn từ diff. **Nếu không tìm thấy Blocker/Major nào, trả về danh sách rỗng — KHÔNG cố tìm cho đủ.**
 
-| Agent | Tập trung | Flag điển hình |
-|---|---|---|
-| **Code Reuse** | Tìm utility/helper đã có để thay function mới viết | New function duplicates existing helper, inline logic could use existing util (string manipulation, path handling, env checks, type guards) |
-| **Code Quality** | Hacky patterns | Redundant state, parameter sprawl, copy-paste với biến thể nhỏ, leaky abstraction, stringly-typed (raw strings nơi đã có enum/constant), unnecessary JSX nesting, nested conditionals 3+ levels, unnecessary comments giải thích WHAT |
-| **Efficiency** | Performance / resource | N+1, missed concurrency (independent ops chạy tuần tự), hot-path bloat, no-op updates trong polling loops, unnecessary existence checks (TOCTOU), unbounded memory, listener leak, overly broad reads |
+**Block 2 — Grounding** (đây là thứ tách "review thật" khỏi "đoán từ diff"):
 
-**Phase 3 — Aggregate + fix**:
+> **Trước khi flag bất cứ điều gì, nạp context — KHÔNG review diff trong ống hút:**
+> 1. Với MỌI file xuất hiện trong diff: **đọc FULL file**, không chỉ hunk. Diff cắt mất chính đoạn code quyết định finding đúng hay sai.
+> 2. Đọc `CLAUDE.md` (nếu có) + 1-2 file cùng thư mục/module với file đã đổi, để học convention **THẬT** của repo. Đừng áp convention generic.
+> 3. Hàm/API/schema bị đổi signature hoặc behavior: `Grep` tìm **mọi caller**, kể cả file KHÔNG nằm trong diff. Thay đổi trông an toàn trong diff vẫn có thể làm gãy caller ở nơi khác — đó là loại lỗi diff-only review không bao giờ thấy.
+> 4. Chỉ flag sau khi đã làm 1-3. Finding suy diễn từ diff là nguyên nhân #1 gây false positive.
 
-1. Đợi cả 3 agent xong, gộp findings lại
-2. Fix trực tiếp trong working tree **chỉ `Blocker` + `Major`**. `Minor` gom vào mục riêng để user tự quyết, `Nit` bỏ. False positive thì skip, không cãi. Cả 3 agent trả rỗng → báo "Không có vấn đề chặn".
-3. **KHÔNG tự commit/push** — để user review changes rồi tự `commit and push` (sẽ hỏi xác nhận push như thường lệ)
-4. Tóm tắt theo đúng format này — `Minor` phải có chỗ đứng, nếu không item 2 nói "gom vào mục riêng" mà không có mục nào:
+| Agent | Tập trung | Severity chủ đạo | Flag điển hình |
+|---|---|---|---|
+| **Correctness / Task-fit** | Code có làm đúng task không | Blocker, Major | Lệch yêu cầu task, thiếu case so với spec, làm dư ngoài scope, edge case (null/empty/list rỗng/boundary/số âm/unicode), off-by-one, `catch` nuốt lỗi, state nửa vời khi throw giữa chừng, migration không idempotent, timezone/rounding |
+| **Security** | Lỗ hổng | Blocker | Thiếu input validation, authz/authn bypass (chặn ở UI mà không chặn ở API), SQL/command injection, path traversal, mass-assignment, secret/token/PII lộ ra log hay response, SSRF, CORS/cookie/session sai |
+| **Efficiency** | Performance / resource | Major | N+1, missed concurrency (independent ops chạy tuần tự), hot-path bloat, no-op updates trong polling loops, unnecessary existence checks (TOCTOU), unbounded memory, listener leak, overly broad reads |
+| **Quality & Reuse** | Code sạch / tái dùng | Minor | New function duplicates existing helper, inline logic could use existing util (string manipulation, path handling, env checks, type guards), redundant state, parameter sprawl, copy-paste với biến thể nhỏ, leaky abstraction, stringly-typed (raw strings nơi đã có enum/constant), unnecessary JSX nesting, nested conditionals 3+ levels, comment giải thích WHAT |
+
+> **Vì sao roster là 4 agent này**: `Blocker` theo bảng severity = "sai logic vs task, lỗ hổng security, mất data, crash" — nên **Correctness và Security là 2 agent bắt buộc**, chúng phụ trách đúng thứ duy nhất chặn merge. `Quality & Reuse` gộp làm 1 slot vì output của nó gần như toàn `Minor`, mà `Minor` thì không auto-fix — không đáng tách thành 2 agent.
+
+**Phase 2.5 — Dedup + verify (BẮT BUỘC — đừng nối thẳng 4 danh sách rồi fix)**:
+
+4 agent chạy context riêng, mỗi agent chỉ nhìn qua 1 lens → chắc chắn có trùng lặp và có finding sai. Auto-fix ở Phase 3 sẽ **sửa code thật** theo danh sách này, nên sai ở đây đắt hơn sai ở một review chỉ để đọc.
+
+1. **Dedup** theo `file:line` + bản chất vấn đề. Trùng → giữ bản mô tả rõ nhất và ghi nhận có mấy agent cùng báo. **2+ agent độc lập cùng chỉ vào 1 chỗ = tín hiệu mạnh**, xử lý trước.
+2. **Verify từng `Blocker`/`Major`** — mặc định là **BÁC BỎ**, chỉ giữ lại khi chứng minh được cả 3:
+   - Mở file thật tại `file:line`, đọc code xung quanh → vấn đề có tồn tại ở code hiện tại không, hay agent đọc nhầm hunk?
+   - Đường đi tới bug có **reachable** không? (nhánh dead code, caller đã guard, input đã validate ở tầng trên → bác bỏ)
+   - Fix đề xuất có áp dụng được với repo này không? (helper/util mà agent gợi ý có tồn tại thật không)
+   - Thiếu bất kỳ điều nào → **loại khỏi danh sách auto-fix**. Còn nghi ngờ thì hạ xuống mục "cần xác nhận" cho user, KHÔNG tự sửa.
+3. `Minor` chỉ dedup, không cần verify (không auto-fix nên sai cũng không phá code).
+
+> Danh sách sau verify **ngắn hơn nhiều** so với tổng 4 agent. Đó là dấu hiệu ĐÚNG, không phải review kém. Báo cáo số bị loại để user thấy tầng verify có chạy.
+
+**Phase 3 — Fix + báo cáo**:
+
+1. Fix trực tiếp trong working tree **chỉ `Blocker` + `Major` đã qua Phase 2.5**. `Minor` gom vào mục riêng để user tự quyết, `Nit` bỏ. Không còn finding nào sau verify → báo "Không có vấn đề chặn".
+2. **KHÔNG tự commit/push** — để user review changes rồi tự `commit and push` (sẽ hỏi xác nhận push như thường lệ)
+3. Tóm tắt theo đúng format này — `Minor` phải có chỗ đứng, nếu không item 1 nói "gom vào mục riêng" mà không có mục nào:
    ```
    Đã fix: <N> Blocker, <M> Major — <danh sách file>
+   Verify: loại <K> finding không xác minh được (tổng <T> findings từ 4 agent)
    Test/typecheck: <status>
 
    ### Minor (không fix — user tự quyết)
    #1 [Minor] path/file.cs:15 — <vấn đề>
+
+   ### Cần xác nhận (không tự fix)
+   #2 path/file.cs:80 — <vấn đề>. Chưa chứng minh được vì <lý do>
    ```
-5. Gợi ý bước tiếp: nếu có fix → `commit and push` rồi `create a merge request`; nếu không có gì cần sửa → `create a merge request` luôn
+4. Gợi ý bước tiếp: nếu có fix → `commit and push` rồi `create a merge request`; nếu không có gì cần sửa → `create a merge request` luôn
 
 **Lưu ý**:
 - Diff > 2000 dòng → review có thể coarse-grained. Khuyến cáo user lần sau chạy sớm hơn (sau mỗi vài commit) thay vì để dồn cuối.
@@ -671,9 +703,6 @@ Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường
 ## Related
 - HNCW-317
 
----  ❌ XÓA
-🤖 Generated with [Claude Code](https://claude.com/claude-code)  ❌ XÓA
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>  ❌ XÓA
 ```
 
 ### "review the MR !<N>" (vai trò Reviewer)
@@ -683,14 +712,33 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>  ❌ XÓA
    - `glab mr view <N> --comments` (hiển thị cả note/discussion đã có)
 3. **BẮT BUỘC** lấy diff từ remote bằng `glab mr diff <N>`. **KHÔNG** thay thế bằng `git diff <base>...<source>` so với branch local — `main` (hoặc base) ở local có thể stale, dẫn tới review nhầm hàng trăm commits đã có sẵn trên remote. Nếu thực sự cần dùng `git diff` (vd để lấy stat), phải `git fetch origin <base-branch>` trước rồi so với `origin/<base-branch>`, không phải branch local.
 
-   > **Inline depth (mặc định) vs deep review.** Mức này review *text diff* từ remote → inline depth, **không cần checkout nhánh MR**. Đủ cho đa số MR. Muốn soi SÂU (3-agent đọc full file): về đúng nhánh source của MR trước (checkout bằng `glab mr checkout <N>`, `git checkout`, hoặc **SourceTree/GUI** — tool nào cũng được, skill chỉ cần HEAD ở đúng nhánh), rồi chạy `review the whole branch`, sau đó quay lại bước 4-5 để post. ⚠️ `review the whole branch` / `/code-review` đọc code **local** — không soi được remote MR khi đang đứng ở nhánh khác, nên checkout là bắt buộc nếu muốn deep.
+   > **3 mức độ sâu — chọn theo nhu cầu:**
+   >
+   > | Mức | Context có được | Cần checkout? |
+   > |---|---|---|
+   > | **Inline** | Chỉ text diff từ `glab mr diff <N>` | Không |
+   > | **Grounded** ← *mặc định* | Full file + caller tại đúng revision của MR | **Không** |
+   > | **Deep** | Grounded + 4-agent ensemble + verify | Có |
+   >
+   > **Grounded — đọc full file mà KHÔNG đụng working tree.** Đây là mức mặc định vì nó gỡ được điểm yếu chí mạng của review chỉ-nhìn-diff mà không bắt user rời nhánh đang làm dở:
+   > ```bash
+   > # <source-branch> lấy từ `glab mr view <N>` (field source branch)
+   > git fetch origin <source-branch>
+   > git show FETCH_HEAD:path/to/file.js       # full file tại đúng revision của MR
+   > git grep -n "functionName" FETCH_HEAD     # tìm caller trong TOÀN repo tại revision đó
+   > ```
+   > ⚠️ **TUYỆT ĐỐI KHÔNG đọc file ở working tree để lấy context cho MR.** Working tree đang ở nhánh khác — nội dung file có thể khác hoàn toàn với revision của MR. Ghép diff của MR với context của nhánh khác cho ra finding sai mà nghe rất thuyết phục. Chỉ đọc qua `FETCH_HEAD:` (hoặc sau khi đã checkout đúng nhánh MR).
+   > ⚠️ Fetch fail (offline / chưa auth) → tụt về mức **Inline** và **nói rõ với user**, đừng im lặng đọc working tree thay thế.
+   >
+   > **Deep** — chỉ khi cần 4-agent ensemble: về đúng nhánh source của MR trước (checkout bằng `glab mr checkout <N>`, `git checkout`, hoặc **SourceTree/GUI** — tool nào cũng được, skill chỉ cần HEAD ở đúng nhánh), rồi chạy `review the whole branch`, sau đó quay lại bước 4-5 để post. ⚠️ `review the whole branch` / `/code-review` đọc code **local** — không soi được remote MR khi đang đứng ở nhánh khác, nên checkout là bắt buộc nếu muốn deep.
    >
    > **Base cho deep review = target branch của MR**, KHÔNG hỏi `main`/`dev`. Lấy bằng `glab mr view <N>` (field targetBranch) — dự án main-chính ra `main`, dự án dev-chính ra `dev`. Dùng đúng nhánh đó làm `<base>` khi `review the whole branch` (đây là ngữ cảnh reviewer: base đã xác định sẵn từ MR, không thuộc trường hợp "hỏi user" ở Phase 1).
 4. **Phân nhánh theo trạng thái comment**:
 
    **(A) MR CHƯA có comment review nào** → review mới hoàn toàn:
-   - Review toàn bộ diff theo tiêu chí Step 2 của mục "review the last change"
-   - ⚠️ **Mức này chỉ có text diff, KHÔNG đọc được full file** → không áp nguyên Step 3 ("chứng minh bằng code đã đọc") vì sẽ loại sạch mọi finding. Thay bằng: finding nào cần context ngoài diff thì ghi **"cần xác nhận"**, đừng khẳng định. Muốn chắc → checkout nhánh MR rồi `review the whole branch`
+   - **Nạp context trước đã** (mức Grounded — xem bảng 3 mức ở trên): `git fetch origin <source-branch>`, rồi `git show FETCH_HEAD:<file>` để đọc **full file** của mọi file trong diff, và `git grep -n <symbol> FETCH_HEAD` để truy caller của hàm/API bị đổi signature. Cũng đọc `CLAUDE.md` tại `FETCH_HEAD` nếu có.
+   - Review toàn bộ diff theo tiêu chí Step 2 của mục "review the last change". Có full file → **áp nguyên Step 3** ("chứng minh bằng code đã đọc") như bình thường
+   - ⚠️ Chỉ khi fetch thất bại và phải tụt về mức **Inline** (chỉ có text diff) thì mới nới Step 3: finding nào cần context ngoài diff ghi **"cần xác nhận"**, đừng khẳng định. Nói rõ trong output là review chạy ở mức Inline
    - Liệt kê issues `#1 [Severity] file:line — <vấn đề>. Đề xuất: <fix>`
    - Verdict map thẳng từ severity: còn `Blocker`/`Major` → `REQUEST_CHANGES` · chỉ còn `Minor` → `COMMENT` · sạch → `APPROVE` (nói rõ "không có vấn đề chặn", không bịa Nit để có cái mà comment)
 
