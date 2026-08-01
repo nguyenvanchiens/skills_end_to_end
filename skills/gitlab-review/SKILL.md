@@ -7,13 +7,18 @@ description: Use when reviewing a GitLab merge request or a whole feature branch
 
 > ## ⚠️ REQUIRES `gitlab-flow`
 >
-> Skill này là **add-on**. Nó tham chiếu `Review lenses`, `Review output` (bảng severity), `Base branch`, `Output language` và `Safety rules` từ skill **`gitlab-flow`** — và **không** chép lại chúng.
+> Skill này là **add-on**. Nó tham chiếu `Review lenses`, `Review output` (bảng severity), `Base branch`, `Output language`, `Safety rules`, và **Step 1-2-3 của `review the last change`** (nạp context · 6 tiêu chí review · lọc false positive — đây là rubric đầy đủ cho `review the MR !<N>` mode A) từ skill **`gitlab-flow`** — và **không** chép lại chúng.
 >
-> Không thấy các mục đó trong context ⇒ **DỪNG**, báo user cài `gitlab-flow` trước:
-> ```bash
-> npx skills add nguyenvanchiens/skills_end_to_end -s gitlab-flow -y -a claude-code --copy
-> ```
-> 🚫 **Tuyệt đối không tự suy ra nội dung thiếu.** Bịa lại bảng severity hay danh mục lens sẽ cho ra review sai chuẩn mà không ai phát hiện.
+> ℹ️ **Các mục borrowed KHÔNG có sẵn trong context là chuyện bình thường** — trigger của skill này chỉ nạp file này, không nạp body của `gitlab-flow`. Đó là tín hiệu "đi đọc", **không phải** tín hiệu cài thiếu. Đừng dừng vì lý do này.
+>
+> Khi cần một mục borrowed, theo đúng thứ tự:
+>
+> 1. **Đọc `../gitlab-flow/SKILL.md`** (đường dẫn tương đối từ thư mục skill này) và lấy đúng mục đó ra. Chỉ đọc khi thực sự cần — `merge the request` không mượn gì nên không cần đọc.
+> 2. **Không tìm thấy file, hoặc file có nhưng thiếu mục đang cần** ⇒ **DỪNG**, báo user cài `gitlab-flow` trước:
+>    ```bash
+>    npx skills add nguyenvanchiens/skills_end_to_end -s gitlab-flow -y -a claude-code --copy
+>    ```
+> 3. 🚫 **Tuyệt đối không tự suy ra nội dung thiếu.** Bịa lại bảng severity hay danh mục lens sẽ cho ra review sai chuẩn mà không ai phát hiện.
 
 **Output language**: mặc định tiếng Việt cho cả 4 trigger ở đây, kể cả khi user gõ trigger bằng tiếng Anh — theo mục `Output language` ở `gitlab-flow`.
 
@@ -62,7 +67,10 @@ Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường
 
 ⚠️ **Bắt buộc chép nguyên văn CẢ HAI block dưới vào prompt của cả 4 agent** — subagent chạy context riêng, KHÔNG thấy mục Review output ở `Conventions` của `gitlab-flow`, KHÔNG thấy Step 1 của `review the last change` (cũng ở `gitlab-flow`):
 
-> 🔗 **Dấu đồng bộ**: Block 1 phải khớp bảng `Review output` ở `gitlab-flow`; dòng lens chép vào mỗi agent phải khớp `Review lenses` ở `gitlab-flow`. Sửa một bên phải sửa bên kia.
+> 🔗 **Dấu đồng bộ** — 3 cặp phải khớp nhau, sửa một bên phải sửa bên kia:
+> - Block 1 ↔ bảng `Review output` ở `gitlab-flow`
+> - dòng lens chép vào mỗi agent ↔ `Review lenses` ở `gitlab-flow`
+> - Block 2 (Grounding) ↔ **Step 1 của `review the last change`** ở `gitlab-flow` (cùng 1 quy tắc nạp context, nay nằm ở 2 skill)
 
 **Block 1 — Severity:**
 

@@ -81,7 +81,7 @@ Quy trình chuẩn cho một feature/bugfix mới. Có 2 vai trò: **Developer**
 | `review the last change` / `review change` (± simplify) | Tóm tắt Step 0 simplify pass + danh sách issue `#1`, `#2`... (vấn đề + đề xuất fix) |
 | Tóm tắt sau `fix all issues` | Danh sách issue đã fix + đề xuất commit message |
 
-> Mục này cũng là nguồn `Output language` cho skill **`gitlab-review`** — 4 trigger vai Reviewer ở đó áp cùng quy tắc, bảng riêng của chúng nằm trong skill đó.
+> Mục này cũng là nguồn `Output language` cho skill **`gitlab-review`** — 4 trigger vai Reviewer ở đó (`review the whole branch`, `review the MR !<N>`, `post review result to the MR`, `merge the request`) áp **cùng** quy tắc trên. Chúng không có dòng riêng trong bảng này: `gitlab-review` gói cả 4 vào **một câu duy nhất** ở đầu skill đó thay vì liệt kê từng trigger.
 
 **Ngoại lệ giữ tiếng Anh** (không Việt hóa):
 - `type`/`scope` trong commit message (chuẩn CC: `feat`, `fix`, `auth`, `billing`...)
