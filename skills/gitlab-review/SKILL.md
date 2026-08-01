@@ -116,7 +116,7 @@ Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường
 3. Tóm tắt theo đúng format này — `Minor` phải có chỗ đứng, nếu không item 1 nói "gom vào mục riêng" mà không có mục nào:
    ```
    Đã fix: <N> Blocker, <M> Major — <danh sách file>
-   Verify: loại <K> finding không xác minh được (tổng <T> findings từ 4 agent)
+   Verify: <T> finding thô → <D> vấn đề sau dedup → bác bỏ <K> → còn <R> để fix
    Test/typecheck: <status>
 
    ### Minor (không fix — user tự quyết)
