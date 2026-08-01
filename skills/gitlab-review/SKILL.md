@@ -70,7 +70,7 @@ Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường
 > 🔗 **Dấu đồng bộ** — 3 cặp phải khớp nhau, sửa một bên phải sửa bên kia:
 > - Block 1 ↔ bảng `Review output` ở `gitlab-flow`
 > - dòng lens chép vào mỗi agent ↔ `Review lenses` ở `gitlab-flow`
-> - Block 2 (Grounding) ↔ **Step 1 của `review the last change`** ở `gitlab-flow` (cùng 1 quy tắc nạp context, nay nằm ở 2 skill)
+> - Block 2 (Grounding) ↔ **Step 1 của `review the last change`** ở `gitlab-flow` — overlap phần đọc full file + học convention thật trước khi flag, **không phải cùng 1 quy tắc**: Block 2 có thêm bước grep caller mà Step 1 không có, Step 1 có thêm Grounding task (đọc mô tả Jira) mà Block 2 không có. Sửa phần chung thì sửa cả hai, đừng gộp làm 1
 
 **Block 1 — Severity:**
 
@@ -229,4 +229,4 @@ Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường
 ## Tools required
 
 - `git`
-- `glab` (GitLab CLI) — bắt buộc cho cả 4 trigger. Chưa cài: https://gitlab.com/gitlab-org/cli
+- `glab` (GitLab CLI) — bắt buộc cho `review the MR !<N>`, `post review result to the MR`, `merge the request`. **`review the whole branch` chỉ cần `git`** — 2 chỗ dùng `glab mr view` ở Phase 1 (xác định `<base>` từ MR đang mở, lấy mô tả task) đều optional, có fallback khi rỗng/lỗi. Chưa cài: https://gitlab.com/gitlab-org/cli

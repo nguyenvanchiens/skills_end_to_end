@@ -14,7 +14,7 @@ Bộ skills GitLab workflow cho Claude Code và các AI coding harness khác. T�
 | [`review-branch`](skills/review-branch/) | ⚠️ **Deprecated** — gộp vào `gitlab-review`. File chỉ còn là con trỏ. | MIT |
 
 > **Recommendation**:
-> - **Thành viên team**: chỉ cài `gitlab-flow`. Bộ này ~5.250 từ; cài thêm phần Reviewer sẽ đội lên ~8.150 từ mỗi lần trigger mà bạn không dùng tới.
+> - **Thành viên team**: chỉ cài `gitlab-flow` (~6.038 từ) là đủ. Không cài `gitlab-review` (cả hai cộng lại ~9.345 từ) nghĩa là máy không phải load thêm nội dung vai Reviewer bạn không dùng tới — mỗi trigger chỉ nạp đúng skill nó khớp, không phải cứ cài `gitlab-review` là `gitlab-flow` nặng thêm ở mọi lần gọi.
 > - **Lead/Maintainer**: `gitlab-flow` + `gitlab-review`, thêm `gitlab-sync` / `gitlab-cherrypick` tuỳ nhu cầu.
 > - `commit` và `review-branch` đã deprecated (gộp vào `gitlab-flow` / `gitlab-review`).
 

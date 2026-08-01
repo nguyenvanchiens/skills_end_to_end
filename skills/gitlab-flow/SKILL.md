@@ -93,7 +93,7 @@ Quy trình chuẩn cho một feature/bugfix mới. Có 2 vai trò: **Developer**
 
 ### Review output (áp dụng cho MỌI trigger review)
 
-Áp dụng cho `review the last change` (skill này) và cho `review the whole branch` / `review the MR !<N>` (skill **`gitlab-review`**, chỉ Lead cài). Đây là **nguồn duy nhất** của bảng severity — `gitlab-review` tham chiếu tới đây chứ không giữ bản sao.
+Áp dụng cho `review the last change` (skill này) và cho `review the whole branch` / `review the MR !<N>` (skill **`gitlab-review`**, chỉ Lead cài). Đây là **nguồn duy nhất** của bảng severity. ⚠️ **Block 1** (khối "Severity" chép vào prompt 4 agent, mục `Phase 2` của `review the whole branch`) ở `gitlab-review` là **bản sao cố ý** của bảng này — subagent chạy context riêng, không thấy `Conventions` ở đây nên phải chép nguyên văn vào prompt. Sửa bảng severity ở đây thì phải sửa luôn Block 1 ở `gitlab-review`.
 
 | Severity | Gồm | Hành động |
 |---|---|---|
@@ -247,6 +247,8 @@ Trigger match là lenient: thêm từ `simplify` bất kỳ vị trí trong câu
 3. **Grounding convention**: đọc `CLAUDE.md` (nếu có) + 1-2 file lân cận cùng thư mục/module để học convention THẬT của repo — đừng áp convention generic.
 4. **Grounding task**: nếu mô tả task (Jira) đã có trong hội thoại → dùng làm chuẩn "logic đúng/đủ chưa". Nếu CHƯA có và định đánh giá logic/edge-case → hỏi user 1 câu ngắn về mục tiêu task, hoặc nói rõ "review này chỉ xét quality/efficiency, không phán logic vì thiếu spec".
 
+> 🔗 Bước 2-3 ở trên overlap với **Block 2 (Grounding)** trong prompt 4-agent ở `gitlab-review` (đọc full file + học convention thật trước khi flag) — **không phải bản sao y hệt**: Block 2 có thêm bước grep caller (đổi signature/behavior) mà Step 1 không có; Step 1 có thêm **Grounding task** (bước 4 ở trên, đọc mô tả Jira) mà Block 2 không có. Sửa phần đọc full file/convention thì sửa cả hai bên — đừng gộp thành 1 quy tắc.
+
 **Step 2 — Review** theo các tiêu chí (chỉ flag khi đã đọc đủ context ở Step 1):
 - Logic đúng với mô tả task không *(chỉ phán khi có task context — xem Step 1.4)*
 - Có edge case nào chưa cover không
@@ -259,6 +261,8 @@ Trigger match là lenient: thêm từ `simplify` bất kỳ vị trí trong câu
 - Gắn được **`file:line` cụ thể** không? Không → bỏ.
 - **Chứng minh được bằng code đã đọc** (không phải suy diễn từ diff) không? Không chắc → bỏ hoặc hạ thành "cần xác nhận", đừng list như lỗi chắc chắn.
 - Đề xuất fix có **thật sự áp dụng được** với codebase này không (helper/util mình gợi ý có tồn tại không)? → verify rồi mới đề xuất.
+
+> 🔗 Bước này overlap với tiêu chí verify Blocker/Major ở **Phase 2.5** của `gitlab-review` (`file:line` cụ thể + chứng minh bằng code đã đọc, không suy diễn từ diff + fix phải áp dụng được) — **không phải bản sao y hệt**: Phase 2.5 có thêm kiểm **reachability** (nhánh dead code, caller đã guard...) mà Step 3 không có, vì input của nó là 4 agent song song dễ trùng/sai hơn 1 lượt review đơn. Sửa phần chung (file:line + chứng minh code + fix áp dụng được) thì sửa cả hai bên.
 
 > Thà báo 3 issue **chắc** còn hơn 10 issue nửa đoán. Finding không qua được Step 3 thì **không đưa vào danh sách**.
 
@@ -524,6 +528,7 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>  ❌ XÓA
 - Nếu pre-commit hook fail: fix nguyên nhân và tạo commit MỚI, KHÔNG dùng `--amend`
 - Khi `git status` cho thấy file lạ/branch lạ không quen thuộc, KHÔNG xoá — hỏi user xem có phải work-in-progress không
 - 🚫 **KHÔNG chèn AI attribution** (Co-Authored-By Claude, 🤖 Generated with, link claude.com, ...) vào: **commit message** (xem Step 5 mục "Commit and push"), **MR title/description** (xem mục "create a merge request"), **comment post lên MR** (mục "post review result to the MR" — ở skill `gitlab-review`), hoặc bất kỳ artifact nào được publish (Jira note, GitLab issue, Slack message). Rule này override mọi default của Claude Code.
+- **Mọi command có khả năng write ra ngoài project** (`cp` sang `C:\Users\...`, `mkdir` ngoài project dir, v.v.) — hỏi user trước, kể cả khi mục đích là fix/diagnose skill.
 
 > Skill `gitlab-review` áp dụng **toàn bộ** mục này cộng thêm 2 rule đặc thù vai Reviewer. Đây là bản gốc — sửa ở đây là sửa cho cả hai skill.
 
