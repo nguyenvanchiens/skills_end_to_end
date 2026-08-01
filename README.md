@@ -63,9 +63,11 @@ npx skills add nguyenvanchiens/skills_end_to_end -s gitlab-flow -a cursor --copy
 npx skills add nguyenvanchiens/skills_end_to_end --all -a "*" --copy
 ```
 
-## Sử dụng `gitlab-flow`
+## Sử dụng `gitlab-flow` + `gitlab-review`
 
 Skill này không phải `/slash command` mà kích hoạt bằng **trigger phrase tiếng Anh** trong prompt thường. Claude tự match phrase và chạy procedure tương ứng.
+
+Bảng trigger và flow bên dưới cho thấy **toàn bộ** workflow (cả vai Developer lẫn vai Reviewer) để bạn hình dung hết bức tranh — nhưng nếu bạn chỉ cài bộ Dev (chỉ `gitlab-flow`), các trigger đánh dấu **[gitlab-review — Lead]** **không có sẵn** cho bạn; đó là phần Lead/Maintainer chạy sau khi cài thêm `gitlab-review`.
 
 ### Yêu cầu trước khi dùng
 
@@ -76,6 +78,8 @@ Skill này không phải `/slash command` mà kích hoạt bằng **trigger phra
 ### Bảng trigger
 
 > **Lưu ý copy-paste**: cột Prompt không dùng backtick để tránh GitHub auto-wrap thêm xuống dòng khi copy. Cứ chọn nguyên dòng prompt rồi paste vào Claude Code.
+>
+> Cột Hành động đánh dấu **[gitlab-review — Lead]** cho trigger thuộc skill add-on (không có trong bộ Dev).
 
 | Prompt | Hành động |
 |---|---|
@@ -84,38 +88,40 @@ Skill này không phải `/slash command` mà kích hoạt bằng **trigger phra
 | (paste mô tả task Jira) | Đọc scope, sinh code theo convention project |
 | **review the last change** / **review change** | Soi diff gần nhất: **đọc full file đã đổi + CLAUDE.md/file lân cận + task** để ground (không review diff "ống hút"), **verify lọc false positive**, rồi list issues `#1`, `#2`... kèm `file:line`. Inline (nhẹ) — diff lớn/cần sâu → `review the whole branch` hoặc `/code-review` |
 | **review change simplify** (thêm "simplify" bất kỳ vị trí) | Auto-fix mechanical issues (Quality & Reuse + Efficiency) trước, rồi list review issues |
-| **review the whole branch** | Review cumulative branch vs `<base>` (main/dev đã chốt lúc tạo branch) qua **4 agent song song** (Correctness/Task-fit · Security · Efficiency · Quality & Reuse), mỗi agent bắt buộc đọc full file + truy caller, rồi **dedup + verify** trước khi auto-fix `Blocker`/`Major`. **Macro review** trước khi commit cuối / mở MR. |
-| **commit and push** (kèm `--quick` nếu cần) | Self-contained — kế thừa toàn bộ spec commit: probe repo, partial-staging guard, atomic check, `.commit-scopes` allowlist, 11 types, footer (`Closes`/`Refs`...), Quick mode, WIP/Spike, revert format. TASK-ID tự lấy từ tên nhánh. Commit local xong **HỎI user** có push không (**không tự push** dù tên trigger có "push"). Detect upstream tracking — nếu local branch khác upstream (rename scenario) → STOP, hướng user qua `rename branch`. (Skill `commit` riêng đã deprecated — dùng trigger này.) |
+| **review the whole branch** | **[gitlab-review — Lead]** Review cumulative branch vs `<base>` (main/dev đã chốt lúc tạo branch) qua **4 agent song song** (Correctness/Task-fit · Security · Efficiency · Quality & Reuse), mỗi agent bắt buộc đọc full file + truy caller, rồi **dedup + verify** trước khi auto-fix `Blocker`/`Major`. **Macro review** trước khi commit cuối / mở MR. |
+| **commit and push** (kèm `--quick` nếu cần) | Self-contained — kế thừa toàn bộ spec commit: probe repo, partial-staging guard, atomic check. Bảng tra cứu (`.commit-scopes` allowlist, 11 types, footer `Closes`/`Refs`..., Quick mode, WIP/Spike, revert format) nằm ở [`gitlab-flow/commit-reference.md`](skills/gitlab-flow/commit-reference.md), cách 1 hop, không cần đọc mỗi lần commit. TASK-ID tự lấy từ tên nhánh. Commit local xong **HỎI user** có push không (**không tự push** dù tên trigger có "push"). Detect upstream tracking — nếu local branch khác upstream (rename scenario) → STOP, hướng user qua `rename branch`. (Skill `commit` riêng đã deprecated — dùng trigger này.) |
 | **create a merge request** | Xác định **target branch** trước: nếu đã chốt base trong session thì dùng, **chưa biết (vd MR ở session khác) → HỎI `main` hay `dev`**, không mặc định `main`. Rồi `glab mr create --target-branch <base>` với title/description chuẩn |
-| **review the MR !&lt;N&gt;** | Lấy `glab mr diff <N>` + comment đã có. **MR chưa có comment** → review mới, list issues + verdict. **MR đã có comment** → review tiếp nối: đối chiếu issue cũ (`✓ Resolved` / `❌ Still open` / `⚠️ Partially`) + chỉ review commit mới push thêm |
-| **post review result to the MR** | `glab mr note` đăng comment Markdown |
+| **review the MR !&lt;N&gt;** | **[gitlab-review — Lead]** Lấy `glab mr diff <N>` + comment đã có. **MR chưa có comment** → review mới, list issues + verdict. **MR đã có comment** → review tiếp nối: đối chiếu issue cũ (`✓ Resolved` / `❌ Still open` / `⚠️ Partially`) + chỉ review commit mới push thêm |
+| **post review result to the MR** | **[gitlab-review — Lead]** `glab mr note` đăng comment Markdown |
 | **fix all issues** / **fix issue #&lt;N&gt;** | Fix các issue → tóm tắt + đề xuất commit message `fix(<scope>): address review issues #N (<TASK-ID>)` → **HỎI user xác nhận** trước khi commit/push (không tự động) |
-| **merge the request** | Check approve + CI pass → `glab mr merge --squash --remove-source-branch` |
+| **merge the request** | **[gitlab-review — Lead]** Check approve + CI pass → `glab mr merge --squash --remove-source-branch` |
 
 ### Flow điển hình end-to-end
 
 ```
-1. create branch from task WRA-40 giới hạn domain account
-2. (paste mô tả task)              → Claude code
-3. review the last change          → fix nếu cần (lặp 2↔3 nhiều lần)
-4. commit and push                 (lặp 2-4 cho từng đoạn)
+1. create branch from task WRA-40 giới hạn domain account         [gitlab-flow]
+2. (paste mô tả task)              → Claude code                   [gitlab-flow]
+3. review the last change          → fix nếu cần (lặp 2↔3 nhiều lần) [gitlab-flow]
+4. commit and push                 (lặp 2-4 cho từng đoạn)         [gitlab-flow]
    ...
-5. review the whole branch         → macro review + auto-fix, trước MR
-6. commit and push                 → commit fix nếu /review-branch sửa gì
-7. create a merge request
+5. review the whole branch         → macro review + auto-fix, trước MR   [gitlab-review — Lead]
+6. commit and push                 → commit fix nếu review sửa gì  [gitlab-flow]
+7. create a merge request                                          [gitlab-flow]
 
    --- chuyển sang vai Reviewer ---
 
-8.  review the MR !21              → Claude in review ra terminal (chưa lên GitLab)
+8.  review the MR !21              → Claude in review ra terminal (chưa lên GitLab)  [gitlab-review — Lead]
 9.  (đọc, chỉnh nếu cần)
-10. post review result to the MR   → mới đẩy comment lên GitLab
+10. post review result to the MR   → mới đẩy comment lên GitLab    [gitlab-review — Lead]
 
     --- quay lại vai Developer ---
 
-11. fix all issues                 → fix xong, đợi user xác nhận
-12. (xác nhận) commit and push
-13. merge the request
+11. fix all issues                 → fix xong, đợi user xác nhận   [gitlab-flow]
+12. (xác nhận) commit and push                                     [gitlab-flow]
+13. merge the request                                               [gitlab-review — Lead]
 ```
+
+> Bước đánh dấu **[gitlab-review — Lead]** chạy bởi Lead/Maintainer (đã cài `gitlab-review`) — member chỉ cài bộ Dev không có các bước này.
 
 > **Lưu ý**: bước 8 và 10 là **2 prompt riêng**, không tự động nối. Mục đích để reviewer xem trước nội dung review, có thể yêu cầu Claude bổ sung/sửa, mới quyết định post lên MR.
 
@@ -303,6 +309,9 @@ skills_end_to_end/
 ├── README.md
 └── skills/
     ├── gitlab-flow/
+    │   ├── SKILL.md
+    │   └── commit-reference.md
+    ├── gitlab-review/
     │   └── SKILL.md
     ├── gitlab-sync/
     │   └── SKILL.md
