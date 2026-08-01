@@ -103,6 +103,7 @@ Quy trình chuẩn cho một feature/bugfix mới. Có 2 vai trò: **Developer**
 | **Nit** | Style, format, ý kiến cá nhân | **Bỏ, không báo** |
 
 - Gán severity cho **mọi** finding. Không gán nổi ⇒ chưa đủ rõ ⇒ bỏ.
+- **Đổi behavior của hàm/API dùng chung** (signature giữ nguyên nên compiler không bắt được) mà có ≥1 caller **ngoài diff** bị ảnh hưởng ⇒ **`Blocker`**, kể cả khi chưa chứng minh được người dùng cuối thấy lỗi. Lý do: loại này không có tầng nào chặn — không compiler, không test, không reviewer đọc diff.
 - Auto-fix (`fix all issues` ở skill này, Phase 3 của `review the whole branch` ở skill `gitlab-review`) **chỉ đụng Blocker + Major**. User gõ đích danh `fix issue #N` thì fix bất kể severity.
 - **Không có Blocker/Major → nói "Không có vấn đề chặn" rồi DỪNG.** 🚫 KHÔNG bịa thêm, KHÔNG nâng Nit lên Major để lấp danh sách. **Danh sách rỗng là kết quả hợp lệ.**
 - Mỗi finding phải có `file:line` + chứng minh từ code **đã đọc thật**. Không chắc → bỏ, hoặc ghi rõ "cần xác nhận".

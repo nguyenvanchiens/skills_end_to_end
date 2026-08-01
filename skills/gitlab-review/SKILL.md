@@ -74,7 +74,7 @@ Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường
 
 **Block 1 — Severity:**
 
-> Gán severity cho mọi finding: `Blocker` (sai logic/security/mất data/crash) · `Major` (edge case thật, N+1 hot path, race) · `Minor` (naming, code thừa) · `Nit` (style — bỏ, đừng báo). Mỗi finding phải có `file:line` + trích code chứng minh, không suy diễn từ diff. **Nếu không tìm thấy Blocker/Major nào, trả về danh sách rỗng — KHÔNG cố tìm cho đủ.**
+> Gán severity cho mọi finding: `Blocker` (sai logic/security/mất data/crash) · `Major` (edge case thật, N+1 hot path, race) · `Minor` (naming, code thừa) · `Nit` (style — bỏ, đừng báo). **Đổi behavior của hàm/API dùng chung** (signature giữ nguyên nên compiler không bắt được) mà có ≥1 caller **ngoài diff** bị ảnh hưởng ⇒ **`Blocker`**. Mỗi finding phải có `file:line` + trích code chứng minh, không suy diễn từ diff. **Nếu không tìm thấy Blocker/Major nào, trả về danh sách rỗng — KHÔNG cố tìm cho đủ.**
 
 **Block 2 — Grounding** (đây là thứ tách "review thật" khỏi "đoán từ diff"):
 
