@@ -226,6 +226,7 @@ git ls-remote --heads origin "refs/heads/release/<app>/<version>" | head -1
 
 - Output rỗng → STOP, báo "Không tìm thấy `release/<app>/<version>`. Chạy `list releases` xem các release có sẵn"
 - Có output → tiếp tục Step 1
+- Hình dạng `release/<app>/<v>` là GIẢ ĐỊNH của skill, không phải sự thật về repo. `list releases` rỗng ⇒ liệt kê tiền tố nhánh thật (`git branch -r | sed 's|^ *origin/||' | grep -oE '^[A-Za-z]+/' | sort | uniq -c`) và hỏi user, đừng tự dựng tên theo mẫu
 
 **Step 1 — Xác định source branch + số ngày lùi**:
 
@@ -301,8 +302,22 @@ Xác nhận? (yes / no / edit)
 
 > ⚠️ Cherry branch phải tạo từ `release/<app>/<version>`, **KHÔNG** từ `main`. Vì mục tiêu là apply commit LÊN release state, không phải merge release vào main.
 
+Trước khi tạo, dò nhánh trung gian cùng tên còn sót từ lượt trước — tên suy từ target nên nó va
+với xác của lần cherry-pick đã huỷ, và cái xác đó mang **base cũ**:
+
 ```bash
 git fetch origin release/<app>/<version>
+git branch -a --list "*cherry/*-to-release-<app>-<version>*"
+git merge-base --is-ancestor origin/release/<app>/<version> <nhanh-tim-thay> && echo "TUOI" || echo "CU - rac"
+```
+
+| Kết quả | Hành động |
+|---|---|
+| Không có | Tạo mới như dưới |
+| Có, chứa `origin/release/<app>/<version>` hiện tại (`TUOI`) | Báo user: có thể là lượt cherry-pick đang dở — hỏi làm tiếp trên nó hay bỏ |
+| Có, KHÔNG chứa release hiện tại | **Rác** — tên và version khai trên đó có thể y hệt thứ định tạo, nhưng merge nó là revert im lặng những gì release đã nhận sau đó. Báo user, xoá (remote: hỏi trước) rồi tạo lại. 🚫 **Không bao giờ merge nó** |
+
+```bash
 git checkout -b cherry/<source>-to-release-<app>-<version> origin/release/<app>/<version>
 ```
 
@@ -317,8 +332,12 @@ git checkout -b cherry/main-to-release-gift-api-v0.5.3 origin/release/gift-api/v
 > Quan trọng: cherry-pick theo thứ tự **commit date ASC** (cũ nhất trước). Lý do: commit sau có thể depend on commit trước; pick ngược thứ tự sẽ tăng nguy cơ conflict. Danh sách ở Step 2 đã in sẵn đúng thứ tự này (nhờ `--reverse`) → giữ nguyên thứ tự số `#` user pick, đừng sắp lại.
 
 ```bash
+b=$(git branch --show-current); case "$b" in cherry/*) ;; *) echo "CHAN: dang o nhanh $b, khong phai cherry/*"; exit 1;; esac
 git cherry-pick -x <SHA1> <SHA2> <SHA3>
 ```
+
+Dòng đầu đọc lại nhánh ngay trong lệnh cherry-pick (mỗi cherry-pick là một commit): user có thể
+đã checkout nhánh khác giữa hai lượt, và cherry-pick rơi thẳng vào `release/*` là vi phạm rule số 1.
 
 Flag `-x`: thêm dòng `(cherry picked from commit <SHA>)` vào body — bắt buộc để trace.
 
@@ -345,6 +364,11 @@ Quy tắc resolve:
 | File config version-specific (vd version string, changelog) | **release** (HEAD) | Version branch giữ version riêng |
 | Resolution không rõ | **STOP, hỏi user** | Cherry-pick sai = release ship code lỗi |
 
+⚠️ **Không lấy-trọn-một-phía để né conflict** (`-X ours`/`-X theirs` cho cả lượt, `checkout
+--theirs` cả loạt): trước đó liệt kê state RIÊNG của release (version string, changelog, config
+build) mà lựa chọn đó sẽ đè, và nói rõ với user. Lý do đầy đủ: `gitlab-flow` → `Conventions` →
+**Resolve conflict (luật dùng chung)**.
+
 **Cách giữ phía cherry (incoming commit)**:
 ```bash
 git checkout --theirs <file>
@@ -361,6 +385,38 @@ git add <file>
 - Mở file, xoá marker `<<<<<<<`, `=======`, `>>>>>>>`
 - Merge logic của 2 phía nếu cả hai cần thiết
 - `git add <file>`
+
+**Cách sửa bằng SCRIPT** (khi nhiều file cùng kiểu conflict — và cho MỌI script đọc rồi ghi đè file, không riêng conflict):
+
+1. Ghi nhận BOM + EOL của **TỪNG file** rồi ghi lại y như vậy — không áp một encoding chung cho cả lô. Python: `open(..., newline='')`, encoding `utf-8` — **KHÔNG** `utf-8-sig` (ăn mất BOM của file có, thêm BOM vào file không có).
+2. Đừng chèn `\n` thô vào file toàn CRLF.
+3. Verify bằng **ĐẾM BYTE**, không bằng `file` / `grep` / `awk` / `git diff`:
+
+```python
+b = open(path, 'rb').read()
+print('CRLF:', b.count(b'\r\n'), 'LF tong:', b.count(b'\n'), 'BOM:', b[:3] == b'\xef\xbb\xbf')
+```
+
+> ⚠ `git diff` với `core.autocrlf=true` **không** hiện lệch EOL — không dùng nó để verify.
+> Lý do đầy đủ + bảng so công cụ: `gitlab-flow` → `Conventions` → **Resolve conflict (luật
+> dùng chung)**.
+
+**File cố ý không commit** (config máy dev) phải làm sạch trước khi cherry-pick: lưu **diff của
+mình** (`git diff -- <file> > <scratch>/my.patch`), không lưu cả file; xong `git apply` lại rồi
+kiểm `git diff --stat -- <file>` đúng bằng phần của mình. Chép đè bản backup = đè im lặng thay đổi
+vừa vào chính file đó.
+
+**Nếu cần probe chẩn đoán trong `.git/`** (ví dụ `fatal: couldn't set refs/heads/...`):
+
+1. Tên hậu tố lạ như `.probe-tmp` — **không bao giờ** `.lock` (file `<ref>.lock` nằm lại làm
+   mọi lệnh git sau đó chết, kể cả GUI user đang mở ở terminal khác).
+2. Xoá trong **cùng một lệnh** với lệnh tạo:
+
+```bash
+cp "$ref" "$ref.probe-tmp" && { mv "$ref.probe-tmp" "$ref" || true; rm -f "$ref.probe-tmp"; }
+```
+
+> Lý do đầy đủ: `gitlab-flow` → `Conventions` → **Resolve conflict (luật dùng chung)**.
 
 Sau khi resolve hết:
 ```bash
@@ -385,6 +441,14 @@ git push -u origin cherry/<source>-to-release-<app>-<version>
 ```
 
 **Step 8 — Tạo MR `cherry/* → release/<app>/<version>`** (KHÔNG về main):
+
+> ⚠️ Mẫu dưới cho thấy các trường và nội dung. **Description có tiếng Việt, hoặc shell là
+> PowerShell ⇒ không truyền qua argv** (argv/pipe PowerShell làm hỏng dấu; cùng lệnh chạy ở Git
+> Bash thì đúng, nên thử ở một máy không chứng minh được gì). Ghi title + body ra file UTF-8 không
+> BOM → dựng JSON bằng python với path TƯƠNG ĐỐI → `glab api --method POST -H "Content-Type:
+> application/json" "projects/:id/merge_requests" --input mr.json` (thiếu `-H` = HTTP 415, không
+> tạo gì) → đọc lại MR trước khi thử lại. Lệnh đầy đủ: `gitlab-flow` → `create a merge request`
+> bước 3.
 
 ```bash
 glab mr create \
@@ -498,6 +562,10 @@ Nếu có tag pointing tới HEAD của release → warn user: "Release đã tag
 - 🚫 **KHÔNG `git push --force`** vào `main`, `release/*`, `builds/*` — kể cả `--force-with-lease`
 - 🚫 **KHÔNG cherry-pick commit chưa land main** (vd commit từ branch feature chưa merge)
 - 🚫 **KHÔNG bỏ flag `-x`** — mất trace SHA gốc, sau audit không biết commit đến từ đâu
+- 🚫 **KHÔNG lấy-trọn-một-phía** (`-X ours`/`-X theirs` cả lượt) để né conflict — xoá im lặng state riêng của release (Step 6)
+- 🚫 **KHÔNG merge / tái dùng nhánh `cherry/*` còn sót** mà không kiểm base của nó chứa release hiện tại (Step 4)
+- ✅ **Đọc lại nhánh trong cùng lệnh với `git cherry-pick`** — chỉ chạy khi đang ở `cherry/*` (Step 5)
+- ✅ **Trước push / tạo MR**: quét bí mật theo giá trị thật (mục `Safety rules` ở `gitlab-flow`)
 - ✅ **Mọi cherry branch là ephemeral** — đảm bảo `--remove-source-branch` khi tạo MR
 - ✅ **Cherry-pick theo thứ tự chronological** (cũ → mới) để giảm conflict
 - ✅ **Hỏi user trước khi resolve conflict** nếu không chắc bên nào đúng — đặc biệt với file config, migration, route

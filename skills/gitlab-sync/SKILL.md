@@ -139,6 +139,7 @@ git ls-remote --heads origin "refs/heads/builds/dev/<app>" | head -1
 
 - Output rỗng → STOP, báo "Không tìm thấy `builds/dev/<app>`. Chạy `list build branches` xem các app có sẵn"
 - Có output → tiếp tục Step 1
+- Hình dạng `builds/dev/<app>` là GIẢ ĐỊNH của skill, không phải sự thật về repo. `list build branches` rỗng ⇒ liệt kê tiền tố nhánh thật (`git branch -r | sed 's|^ *origin/||' | grep -oE '^[A-Za-z]+/[A-Za-z]+/' | sort | uniq -c`) và hỏi user, đừng tự dựng tên theo mẫu
 
 **Step 1 — Verify tình huống có cần sync không**:
 
@@ -155,6 +156,22 @@ git log --oneline origin/builds/dev/<app>..origin/main          # commit có tr�
 | `origin/main..origin/builds/dev/<app>` có non-merge commit | Vi phạm rule "không commit thẳng builds/*" | Cảnh báo user, đề xuất chạy `kiểm tra build hygiene` trước khi sync |
 
 **Step 2 — Tạo sync branch từ `main`** (KHÔNG từ target):
+
+Trước khi tạo, dò nhánh trung gian cùng tên còn sót từ lượt trước — tên suy từ target nên nó va
+với xác của lần sync đã huỷ, và cái xác đó mang **base cũ**:
+
+```bash
+git branch -a --list "*sync/main-to-dev-<app>*"
+git merge-base --is-ancestor origin/main <nhanh-tim-thay> && echo "TUOI" || echo "CU - rac"
+```
+
+| Kết quả | Hành động |
+|---|---|
+| Không có | Tạo mới như dưới |
+| Có, chứa `origin/main` hiện tại (`TUOI`) | Báo user: có thể là lượt sync đang dở — hỏi làm tiếp trên nó hay bỏ |
+| Có, KHÔNG chứa `origin/main` hiện tại | **Rác** — tên và nội dung khai báo có thể y hệt thứ định tạo, nhưng merge nó là revert im lặng code main. Báo user, xoá (remote: hỏi trước) rồi tạo lại. 🚫 **Không bao giờ merge nó** |
+
+Lỗi "đã tồn tại" ⇒ câu hỏi đầu tiên là "cái đang tồn tại rẽ từ đâu?", không phải đổi tên hay merge luôn.
 
 ```bash
 git checkout main
@@ -192,6 +209,14 @@ Quy tắc resolve:
 | Config QA-specific trên `builds/dev` (API URL QA, debug flag) | **target** (incoming) | QA env config không được leak lên main |
 | Resolution không rõ | **STOP, hỏi user** | Không tự đoán — sync sai sẽ ảnh hưởng deploy |
 
+⚠️ **Trước khi lấy-trọn-một-phía** (`-s ours`/`-X ours`, `checkout --ours` cả loạt) để né conflict:
+liệt kê state RIÊNG của `builds/dev/<app>` (version trong `csproj`/`package.json`, config
+build/env) — lấy trọn cây main sẽ xoá im lặng chúng, có khi kéo version tụt dưới cả tag đang
+chạy. Mặc định là merge 3 chiều thường (nó tự giữ phía target đã đổi). "0 conflict" nhờ `-s ours`
+nghĩa là không câu hỏi nào được trả lời. Nghi công cụ/quy trình sync hỏng ⇒ mô phỏng đúng quy
+trình đã ghi (`git merge-tree`) trước khi kết luận. Lý do đầy đủ: `gitlab-flow` → `Conventions` →
+**Resolve conflict (luật dùng chung)**.
+
 **Cách giữ phía main nhanh** (khi chắc chắn 100%):
 
 ```bash
@@ -211,6 +236,26 @@ git add <file>
 - Giữ đúng phiên bản logic mong muốn
 - `git add <file>`
 
+**Cách sửa bằng SCRIPT** (khi nhiều file cùng kiểu conflict — và cho MỌI script đọc rồi ghi đè file, không riêng conflict):
+
+1. Ghi nhận BOM + EOL của **TỪNG file** rồi ghi lại y như vậy — không áp một encoding chung cho cả lô. Python: `open(..., newline='')`, encoding `utf-8` — **KHÔNG** `utf-8-sig` (ăn mất BOM của file có, thêm BOM vào file không có).
+2. Đừng chèn `\n` thô vào file toàn CRLF.
+3. Verify bằng **ĐẾM BYTE**, không bằng `file` / `grep` / `awk` / `git diff`:
+
+```python
+b = open(path, 'rb').read()
+print('CRLF:', b.count(b'\r\n'), 'LF tong:', b.count(b'\n'), 'BOM:', b[:3] == b'\xef\xbb\xbf')
+```
+
+> ⚠ `git diff` với `core.autocrlf=true` **không** hiện lệch EOL — không dùng nó để verify.
+> Lý do đầy đủ + bảng so công cụ: `gitlab-flow` → `Conventions` → **Resolve conflict (luật
+> dùng chung)**.
+
+**File cố ý không commit** (config máy dev) phải làm sạch trước khi merge: lưu **diff của mình**
+(`git diff -- <file> > <scratch>/my.patch`), không lưu cả file; merge xong `git apply` lại rồi kiểm
+`git diff --stat -- <file>` đúng bằng phần của mình. Chép đè bản backup = đè im lặng thay đổi của
+main trong chính file đó, và không có diff nào để ai phát hiện.
+
 **Step 5 — Verify + commit**:
 
 ```bash
@@ -218,9 +263,11 @@ git status                       # phải sạch, không còn file `U`
 git diff --cached --stat         # review những file thay đổi
 ```
 
-Commit message:
+Commit message — đọc lại nhánh trong **cùng một lệnh** với `git commit` (user có thể đã checkout
+nhánh khác giữa hai lượt; commit rơi vào `builds/dev/*` là vi phạm rule số 1):
 
 ```bash
+b=$(git branch --show-current); case "$b" in sync/*) ;; *) echo "CHAN: dang o nhanh $b, khong phai sync/*"; exit 1;; esac
 git commit -m "$(cat <<'EOF'
 chore(sync): resolve conflict main → builds/dev/<app>
 
@@ -231,6 +278,18 @@ EOF
 ```
 
 > 🚫 KHÔNG `Co-Authored-By: Claude` (xem `gitlab-flow` rule).
+
+**Nếu cần probe chẩn đoán trong `.git/`** (ví dụ `fatal: couldn't set refs/heads/...`):
+
+1. Tên hậu tố lạ như `.probe-tmp` — **không bao giờ** `.lock` (file `<ref>.lock` nằm lại làm
+   mọi lệnh git sau đó chết, kể cả GUI user đang mở ở terminal khác).
+2. Xoá trong **cùng một lệnh** với lệnh tạo:
+
+```bash
+cp "$ref" "$ref.probe-tmp" && { mv "$ref.probe-tmp" "$ref" || true; rm -f "$ref.probe-tmp"; }
+```
+
+> Lý do đầy đủ: `gitlab-flow` → `Conventions` → **Resolve conflict (luật dùng chung)**.
 
 **Step 6 — Push gate**:
 
@@ -243,6 +302,14 @@ git push -u origin sync/main-to-dev-<app>
 ```
 
 **Step 7 — Tạo MR `sync/* → builds/dev/<app>`** (KHÔNG về main):
+
+> ⚠️ Mẫu dưới cho thấy các trường và nội dung. **Description có tiếng Việt, hoặc shell là
+> PowerShell ⇒ không truyền qua argv** (argv/pipe PowerShell làm hỏng dấu; cùng lệnh chạy ở Git
+> Bash thì đúng, nên thử ở một máy không chứng minh được gì). Ghi title + body ra file UTF-8 không
+> BOM → dựng JSON bằng python với path TƯƠNG ĐỐI → `glab api --method POST -H "Content-Type:
+> application/json" "projects/:id/merge_requests" --input mr.json` (thiếu `-H` = HTTP 415, không
+> tạo gì) → đọc lại MR trước khi thử lại. Lệnh đầy đủ: `gitlab-flow` → `create a merge request`
+> bước 3.
 
 ```bash
 glab mr create \
@@ -418,7 +485,10 @@ Nếu sau này 1 trong các flow trên trở nên thường xuyên + hay conflic
 
 - 🚫 **KHÔNG tạo MR `builds/dev/* → main`** dưới bất kỳ hình thức nào, kể cả qua nhánh trung gian. Nếu user yêu cầu, từ chối và giải thích vi phạm rule 1-chiều
 - 🚫 **KHÔNG `git push --force`** vào `main`, `builds/dev/*` — kể cả `--force-with-lease`. Reset chỉ làm khi user/Maintainer chủ động ra lệnh
-- 🚫 **KHÔNG `git merge --strategy=ours`** để "fake resolve" — sẽ skip thay đổi thật, gây lệch code thầm lặng
+- 🚫 **KHÔNG `git merge --strategy=ours` / `-s ours`** để "fake resolve" — sẽ skip thay đổi thật, gây lệch code thầm lặng, và xoá luôn state riêng của nhánh đích (version, config build)
+- 🚫 **KHÔNG merge / tái dùng nhánh `sync/*` còn sót** mà không kiểm base của nó chứa `origin/main` hiện tại (Step 2)
+- ✅ **Đọc lại nhánh trong cùng lệnh với `git commit`** — chỉ commit khi đang ở `sync/*` (Step 5)
+- ✅ **Trước push / tạo MR**: quét bí mật theo giá trị thật (mục `Safety rules` ở `gitlab-flow`) — sync chỉ chuyển commit đã có nên rủi ro thấp hơn, nhưng file resolve conflict là nội dung mới
 - 🚫 **KHÔNG dùng `git checkout --ours <file>` cho code logic** mà không đọc qua diff — chỉ dùng khi đã xác nhận phía main đúng
 - ✅ **Mọi sync branch là ephemeral** — đảm bảo `--remove-source-branch` khi tạo MR
 - ✅ **Hỏi user trước khi resolve** nếu không chắc bên nào đúng — đặc biệt với file config, .env, route definition
