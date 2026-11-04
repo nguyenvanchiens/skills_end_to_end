@@ -564,6 +564,7 @@ Nếu có tag pointing tới HEAD của release → warn user: "Release đã tag
 - 🚫 **KHÔNG bỏ flag `-x`** — mất trace SHA gốc, sau audit không biết commit đến từ đâu
 - 🚫 **KHÔNG lấy-trọn-một-phía** (`-X ours`/`-X theirs` cả lượt) để né conflict — xoá im lặng state riêng của release (Step 6)
 - 🚫 **KHÔNG merge / tái dùng nhánh `cherry/*` còn sót** mà không kiểm base của nó chứa release hiện tại (Step 4)
+- ✅ **Chỉ tin `origin/*` khi fetch sạch**: đọc stderr của `git fetch` — có `error:`/`couldn't set` thì ref đó có thể còn đầu CŨ, và lọc commit (Step 2) / `merge-base --is-ancestor` (Step 4) trên nó cho kết luận sai. Lấy đầu thật bằng `git ls-remote origin refs/heads/<nhánh>`, `git fetch origin <sha>`, so trên SHA đó (luật fetch dùng chung ở `gitlab-flow` → mục *Fetch lỗi & ref remote (luật dùng chung)*)
 - ✅ **Đọc lại nhánh trong cùng lệnh với `git cherry-pick`** — chỉ chạy khi đang ở `cherry/*` (Step 5)
 - ✅ **Trước push / tạo MR**: quét bí mật theo giá trị thật (mục `Safety rules` ở `gitlab-flow`)
 - ✅ **Mọi cherry branch là ephemeral** — đảm bảo `--remove-source-branch` khi tạo MR

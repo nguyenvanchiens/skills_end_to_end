@@ -62,9 +62,9 @@ Review TOÀN BỘ thay đổi của branch hiện tại so với `<base>` (cách
    - Không lấy được (user bỏ qua) → vẫn chạy Phase 2, nhưng **nói rõ với user**: "thiếu task context — agent Correctness chỉ xét self-consistency, không phán được logic có khớp yêu cầu hay không"
    - Task/user nêu một repo hoặc file làm **khuôn** ("làm theo bên X", "mirror module Y") → ghi đường dẫn khuôn vào context cho cả 4 agent (Block 2 bước 6 review cả khuôn, không chỉ so cho khớp)
 
-**Phase 2 — Launch 4 agent SONG SONG** (1 message, 4 Agent tool calls):
+**Phase 2 — Launch 4 agent SONG SONG** (1 message, 4 Agent tool calls, **foreground** — `run_in_background: false`): agent nền có thể trả kết quả về nhầm cha, hoặc bị cắt khi chính phiên này đang là subagent — rồi bước gộp chạy trên 1/4 lens mà không ai biết.
 
-Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường dẫn new-files (`.git/review_branch_new.txt`) + context "cumulative diff branch <name> against <base>" + mô tả task từ Phase 1 bước 6.
+Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường dẫn new-files (`.git/review_branch_new.txt`) + context "cumulative diff branch <name> against <base>" + mô tả task từ Phase 1 bước 6 — **và KHÔNG gì khác**: không chẩn đoán, kết luận, "bản vá đúng hướng", hay tóm tắt diễn biến phiên (agent nhận đáp án sẽ đi xác nhận đáp án, không soi). Mô tả task/MR đi kèm chỉ thị kiểm chứng lại từng khẳng định trong đó, kể cả con số.
 
 ⚠️ **Bắt buộc chép nguyên văn CẢ HAI block dưới vào prompt của cả 4 agent** — subagent chạy context riêng, KHÔNG thấy mục Review output ở `Conventions` của `gitlab-flow`, KHÔNG thấy Step 1 của `review the last change` (cũng ở `gitlab-flow`):
 
@@ -88,11 +88,11 @@ Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường
 > **Trước khi flag bất cứ điều gì, nạp context — KHÔNG review diff trong ống hút:**
 > 1. Với MỌI file xuất hiện trong diff: **đọc FULL file**, không chỉ hunk. Diff cắt mất chính đoạn code quyết định finding đúng hay sai.
 > 2. Đọc `CLAUDE.md` (nếu có) + 1-2 file cùng thư mục/module với file đã đổi, để học convention **THẬT** của repo. Đừng áp convention generic.
-> 3. Hàm/API/schema bị đổi signature hoặc behavior: `Grep` tìm **mọi caller**, kể cả file KHÔNG nằm trong diff. Field/cột bị gỡ khỏi mọi đường GHI mà vẫn còn trong model/DB (diff chỉ có dòng `-`) ⇒ grep **tên field trần** toàn repo tìm bên ĐỌC. Thêm đường gọi / chế độ chạy / entry point mới ⇒ grep tài liệu, chú thích, header file cấu hình mô tả đường cũ như đường duy nhất, kể cả file ngoài diff.
+> 3. Hàm/API/schema bị đổi signature hoặc behavior: `Grep` tìm **mọi caller**, kể cả file KHÔNG nằm trong diff. Field/cột bị gỡ khỏi mọi đường GHI mà vẫn còn trong model/DB (diff chỉ có dòng `-`) ⇒ grep **tên field trần** toàn repo tìm bên ĐỌC. Thêm đường gọi / chế độ chạy / entry point mới ⇒ grep tài liệu, chú thích, header file cấu hình mô tả đường cũ như đường duy nhất, kể cả file ngoài diff. Chiều NGƯỢC: giá trị từ request/client mà diff lưu hoặc truyền đi ⇒ lần tới **sink** cuối (filesystem, SQL thô, shell, URL, xoá dữ liệu) kể cả sink ngoài diff, kiểm sink tự validate hay tin caller — sink hổng sẵn mà MR mở đường mới tới ⇒ tính cho MR.
 > 4. Kết luận **phủ định** ("không caller", "không có luật") ⇒ quét lần hai rộng hơn hẳn (bỏ mọi bộ lọc đường dẫn) và ghi phạm vi đã quét vào kết luận. Kết quả MỘT PHẦN không phải bằng chứng phép quét đủ rộng.
 > 5. Caller ở **repo khác** ⇒ tìm MR/nhánh đồng hành (cùng TASK-ID/tên nhánh: `glab mr list`, rồi `git ls-remote --heads origin | grep <TASK-ID>`), fetch vào ref riêng và đọc ở đó — **không** đọc working tree của repo đó. Đã sửa ở MR đồng hành ⇒ không còn là "quên sửa" mà là ràng buộc thứ tự deploy (`Major`).
-> 6. MR dựng từ **một mẫu**: file tự khai "mirror/port/copy từ X" ⇒ diff các **guard** của từng cặp hàm (early-return, `await` trước payload, cờ đang-xử-lý, `?.`/`??`, điều kiện trước `setState`) và đọc chú thích quanh guard ở X làm bằng chứng severity — độ trùng thấp không loại trừ guard bị rơi. Bám **khuôn** từ repo khác ⇒ review cả khuôn ("đang chạy production" không phải "đã kiểm"). Thêm **thành viên thứ N+1** vào họ cùng khuôn ⇒ lấy hiệu tập file với từng anh em; field định danh (port, base URL, AppId, tên DB/queue) trùng anh em là lỗi.
-> 7. Chú thích **biện minh / viện dẫn** là lời khai: artefact được viện dẫn làm nguồn ⇒ `git ls-tree -r --name-only` / `git grep` tại đúng revision (không có ⇒ so với code tương đương gần nhất đang chạy); lý do liệt kê N mục đích ⇒ tick với TỪNG mục; "ở đây không cần … như <module khác>" ⇒ đi đọc module đó.
+> 6. MR dựng từ **một mẫu**: file tự khai "mirror/port/copy từ X" ⇒ diff các **guard** của từng cặp hàm (early-return, `await` trước payload, cờ đang-xử-lý, `?.`/`??`, điều kiện trước `setState`) và đọc chú thích quanh guard ở X làm bằng chứng severity — độ trùng thấp không loại trừ guard bị rơi. Bám **khuôn** từ repo khác ⇒ review cả khuôn ("đang chạy production" không phải "đã kiểm"). Thêm **thành viên thứ N+1** vào họ cùng khuôn ⇒ lấy hiệu tập file với từng anh em; field định danh (port, base URL, AppId, tên DB/queue) trùng anh em là lỗi. Diff với khuôn chỉ thấy cái ĐÃ đổi ⇒ grep trong bản mới mọi định danh đặc thù của khuôn (tên app, cổng, host, đường dẫn, ClientId — cả trong chú thích); mỗi chỗ còn lại phải chứng minh đúng cho bản mới, "giống khuôn" không phải bằng chứng.
+> 7. Chú thích **biện minh / viện dẫn** là lời khai: artefact được viện dẫn làm nguồn ⇒ `git ls-tree -r --name-only` / `git grep` tại đúng revision (không có ⇒ so với code tương đương gần nhất đang chạy — "gần" đo bằng HÀNH VI trích từ chính câu viện dẫn, không bằng tên; nguồn NGOÀI repo còn đang sửa ⇒ mở ở trạng thái hôm nay, đồng bộ `gitlab-flow` Step 1 5e); lý do liệt kê N mục đích ⇒ tick với TỪNG mục; "ở đây không cần … như <module khác>" ⇒ đi đọc module đó.
 > 8. Phủ phần **còn lại**: MR dọn dẹp ⇒ tự sinh danh sách thực thể cùng loại từ repo rồi phân giải từng cái (đối chiếu lời khai của tác giả là phép kiểm yếu), soi dòng kề dòng đã sửa; nhưng "còn sót chỗ khác" phải đo ở TẦNG bản sửa nằm — ứng viên hội tụ vào leaf đã vá ⇒ loại. "Đã chặn giá trị xấu" ⇒ liệt kê mọi đường RA (render, xuất file, clipboard, URL, log, payload).
 > 9. Diff đụng **cấu hình framework** hoặc tầng metadata/SEO/routing ⇒ đọc giá trị MẶC ĐỊNH của thư viện cho mọi tuỳ chọn KHÔNG khai trong code, rồi liệt kê thứ framework tự phát ra ngoài code (HTTP header, cookie, redirect). Tuỳ chọn không khai vẫn là một quyết định — nó chỉ không hiện trong diff.
 > 10. Chỉ flag sau khi đã làm 1-9 (bước nào không khớp tình huống thì bỏ qua). Finding suy diễn từ diff là nguyên nhân #1 gây false positive.
@@ -112,16 +112,19 @@ Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường
 
 4 agent chạy context riêng, mỗi agent chỉ nhìn qua 1 lens → chắc chắn có trùng lặp và có finding sai. Auto-fix ở Phase 3 sẽ **sửa code thật** theo danh sách này, nên sai ở đây đắt hơn sai ở một review chỉ để đọc.
 
+**Mở đầu bằng phép đếm cứng: "đã nhận N/4 lens".** Danh sách rỗng từ 1/4 lens trông y hệt danh sách rỗng từ 4/4. N<4 ⇒ chạy lại lens thiếu (foreground) rồi mới dedup; buộc phải nộp khi N<4 ⇒ kết luận duy nhất được phép là **"CHƯA ĐỦ — thiếu lens X"** — 🚫 không "Không có vấn đề chặn", không verdict.
+
 1. **Dedup** theo `file:line` + bản chất vấn đề. Trùng → giữ bản mô tả rõ nhất và ghi nhận có mấy agent cùng báo. **2+ agent độc lập cùng chỉ vào 1 chỗ = tín hiệu mạnh**, xử lý trước.
    - ⚠️ **Cùng chỗ nhưng đề xuất LOẠI TRỪ nhau** (cách chữa của lens này kích hoạt đúng lỗi lens kia chỉ ra) ⇒ KHÔNG dedup, cũng không chọn phe. Đó là dấu hiệu cả hai đang chữa triệu chứng: ghi ra bất biến mỗi bên đang bảo vệ, rồi tìm giả định thứ ba khiến hai bất biến xung đột (thường là khoá định danh hoặc NGUỒN của giá trị). Chỉ khi chứng minh được hai bất biến thật sự không cùng thoả được mới chọn — và khi đó trình đánh đổi cho user, không tự chọn.
-2. **Verify từng `Blocker`/`Major`** — mặc định **KHÔNG vào auto-fix** cho tới khi chứng minh được cả 4 điều dưới:
+2. **Verify từng `Blocker`/`Major`** — mặc định **KHÔNG vào auto-fix** cho tới khi chứng minh được cả 5 điều dưới:
    - Mở file thật tại `file:line`, đọc code xung quanh → vấn đề có tồn tại ở code hiện tại không, hay agent đọc nhầm hunk?
    - Đường đi tới bug có **reachable** không? (nhánh dead code, caller đã guard, input đã validate ở tầng trên → bác bỏ)
-   - Fix đề xuất có áp dụng được với repo này không? (helper/util mà agent gợi ý có tồn tại thật không)
-   - **Finding do nhánh GÂY RA, hay chỉ được lens PHÁT HIỆN?** (tiêu chí phân loại, không phải loại bỏ) Đối chiếu `file:line` với danh sách file trong diff. Trong diff → auto-fix như thường. Ngoài diff → mặc định KHÔNG auto-fix, báo mục riêng; ngoại lệ duy nhất: thay đổi cơ học, cùng loại y hệt việc nhánh đang làm, ở chỗ nhánh bỏ sót, đầu ra không đổi và có test/typecheck khoá. Tái cấu trúc, đổi thứ tự lời gọi, đụng chốt bảo mật: không bao giờ tự sửa dù verify xanh.
+   - Fix đề xuất có áp dụng được **và ĐÚNG** không? Helper/util agent gợi ý có tồn tại thật không; rồi đọc phần mã BẢN FIX sẽ chạm (hiếm khi trùng chỗ finding chỉ) cùng mọi consumer phía sau: *sau fix, đường đi mới chạy qua những gì?* Fix sinh hình dạng dữ liệu / nhánh trước đây không tới được ⇒ code mới, mặc định chưa an toàn. Fix là **cổng chặn** (validation, equality, guard) ⇒ thử chiều false-positive: ca hợp lệ nào đi qua cổng, đầu vào cổng có luôn sẵn và chuẩn hoá giống nhau ở mọi đường ghi (state nạp bất đồng bộ có thể null; roundtrip đọc-sửa-ghi idempotent?). Fix một **lớp lỗi** ⇒ viết lớp đó thành một câu không chứa tên hàm, grep toàn module, liệt kê MỌI chỗ khớp: đã sửa hay cố ý bỏ. Fix ở tầng **schema** (DDL, migration, script khởi tạo) ⇒ chỉ là "đã sửa" khi chạy trên DB ĐÃ CÓ dữ liệu, hai lần, rồi đo lại trạng thái (`CREATE TABLE IF NOT EXISTS` bỏ cả thân lệnh khi bảng đã có; file đã có khối bù/`ALTER` có điều kiện là lời khai rằng sửa `CREATE` không đủ); SQL dạng chuỗi ⇒ chạy trên đúng engine — build không kiểm nó.
+   - **Bằng chứng GIÁN TIẾP là giả thuyết** — phân giải bằng chính thứ nó đứng thay: tên nghe giống (file/hàm đã đổi tên) ⇒ trích tiêu chí HÀNH VI ngay tại chỗ tham chiếu rồi grep theo đó; hàm lân cận cùng class ⇒ truy instance thật gọi hàm (field/factory → datasource → engine) trước khi flag luật riêng của một engine; số đo ("làm đỏ N test", "chậm X%") ⇒ số đó đo phương án NÀO — đo lại đúng phương án đang bàn; triệu chứng khớp giả thuyết quen ⇒ liệt kê nguyên nhân khác cho cùng triệu chứng, chọn phép đo PHÂN BIỆT được; lý do vì sao chỗ cùng dạng lại chạy đúng ⇒ trích từ mã (kể cả mã thư viện), không trích được thì không ghi — lý do bịa sẽ bị chép vào tài liệu như luật.
+   - **Finding do nhánh GÂY RA, hay chỉ được lens PHÁT HIỆN?** (tiêu chí phân loại, không phải loại bỏ) Đối chiếu `file:line` với danh sách file trong diff — sink hổng sẵn ngoài diff mà nhánh mở đường mới tới tính là GÂY RA. Trong diff → auto-fix như thường. Ngoài diff → mặc định KHÔNG auto-fix, báo mục riêng; ngoại lệ duy nhất: thay đổi cơ học, cùng loại y hệt việc nhánh đang làm, ở chỗ nhánh bỏ sót, đầu ra không đổi và có test/typecheck khoá. Tái cấu trúc, đổi thứ tự lời gọi, đụng chốt bảo mật: không bao giờ tự sửa dù verify xanh.
    - Thiếu bất kỳ điều nào → **loại khỏi danh sách auto-fix**. Còn nghi ngờ thì hạ xuống mục "cần xác nhận" cho user, KHÔNG tự sửa.
    - **BÁC BỎ hẳn** (loại khỏi báo cáo) thì phải bằng phép đo **của chính mình** bác được MỆNH ĐỀ. Chạy lại phép đo của agent ra số khác mới chỉ hạ CHỨNG CỨ: dạng hỏng hay gặp nhất của agent chạy nhanh là *kết luận đúng, chứng cứ ẩu* — bác theo chứng cứ là bỏ sót bug thật.
-   - Đường đo biến nghi ngờ thành bằng chứng (đầy đủ ở Step 3 của `review the last change`, `gitlab-flow`): thư viện ⇒ chạy hàm thật kèm **ca đối chứng**; thư viện đóng ⇒ **tiền lệ** cùng hình dạng trong chính class đó; giá trị A→B ⇒ **hằng số sẵn có** cho B; "thiếu test" ⇒ viết–chạy–xoá test đó; "không thể xảy ra" ⇒ chỉ ra chỗ **code** chặn, không phải tài liệu; fix "fail fast"/chốt chặn/phụ thuộc thứ tự khởi tạo ⇒ **dựng điều kiện hỏng và đo**; giá trị ghép từ ≥2 nguồn ⇒ ca tái hiện là **tích Descartes** các biên, không nguồn nào lấy mặc định.
+   - Đường đo biến nghi ngờ thành bằng chứng (đầy đủ ở Step 3 của `review the last change`, `gitlab-flow`): thư viện ⇒ chạy hàm thật kèm **ca đối chứng**; thư viện đóng ⇒ **tiền lệ** cùng hình dạng trong chính class đó, trên cùng instance/datasource; giá trị A→B ⇒ **hằng số sẵn có** cho B; "thiếu test" ⇒ viết–chạy–xoá test đó; "không thể xảy ra" ⇒ chỉ ra chỗ **code** chặn, không phải tài liệu; fix "fail fast"/chốt chặn/phụ thuộc thứ tự khởi tạo ⇒ **dựng điều kiện hỏng và đo**; giá trị ghép từ ≥2 nguồn ⇒ ca tái hiện là **tích Descartes** các biên, không nguồn nào lấy mặc định.
 3. **Finding bị agent tự HẠ** (xuống `Minor`, hoặc vào mục "dưới ngưỡng / đã cân nhắc bỏ qua") cũng qua verify: kiểm lý do hạ theo `Review output` (anh em trong chính MR, tiền lệ là quyết định hay tích tụ, hệ quả còn lại của dòng code, đo đủ từng nguồn, tầng chặn phía sau có đang bật). Verify chỉ soi chiều nâng thì chiều hạ lọt trọn vẹn mà không phát tín hiệu nào.
 4. `Minor` chỉ dedup, không cần verify (không auto-fix nên sai cũng không phá code). Mục `Cần xác nhận` của agent đi **thẳng** sang mục cùng tên ở báo cáo Phase 3 — không có gì để verify, đó chính là lý do nó ở đó.
 
@@ -129,12 +132,12 @@ Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường
 
 **Phase 3 — Fix + báo cáo**:
 
-1. Fix trực tiếp trong working tree **chỉ `Blocker` + `Major` đã qua Phase 2.5** (trong diff, hoặc ngoại lệ cơ học ngoài diff). `Minor` gom vào mục riêng để user tự quyết, `Nit` bỏ. Không còn finding nào sau verify → báo "Không có vấn đề chặn". Chụp TRƯỚC, đối chiếu TRƯỚC/SAU và soát phạm vi sau fix (mọi điểm ghi state, test double khi đổi chữ ký gọi) theo `fix all issues` bước 3-4 ở `gitlab-flow`. Fix kiểu "làm lỗi ồn ào" thì câu mô tả trong báo cáo/commit phải là chế độ hỏng ĐÃ ĐO, không phải suy từ `throw`.
+1. Fix trực tiếp trong working tree **chỉ `Blocker` + `Major` đã qua Phase 2.5** (trong diff, hoặc ngoại lệ cơ học ngoài diff). `Minor` gom vào mục riêng để user tự quyết, `Nit` bỏ. Không còn finding nào sau verify → báo "Không có vấn đề chặn". Chụp TRƯỚC, đối chiếu TRƯỚC/SAU và soát phạm vi sau fix (mọi điểm ghi state, test double khi đổi chữ ký gọi) theo `fix all issues` bước 3-4 ở `gitlab-flow`. Fix kiểu "làm lỗi ồn ào" thì câu mô tả trong báo cáo/commit phải là chế độ hỏng ĐÃ ĐO, không phải suy từ `throw`. "Đã fix" chỉ dành cho fix qua phép kiểm "fix ĐÚNG" ở Phase 2.5 (tầng schema: đã chạy trên DB có dữ liệu); còn lại ghi "đã viết code sửa, chưa chứng minh có tác dụng" — vòng sửa này là code mới, MR sẽ soi nó như code gốc.
 2. **KHÔNG tự commit/push** — để user review changes rồi tự `commit and push` (sẽ hỏi xác nhận push như thường lệ)
 3. Tóm tắt theo đúng format này — `Minor` phải có chỗ đứng, nếu không item 1 nói "gom vào mục riêng" mà không có mục nào. Chạy khối "Tự soát chính báo cáo" ở Step 4 của `review the last change` trước khi đưa ra:
    ```
    Đã fix: <N> Blocker, <M> Major — <danh sách file>   (ngoài diff gốc: <F> file)
-   Verify: <T> finding thô → <D> vấn đề sau dedup → bác bỏ <K> (mệnh đề sai) · sửa chứng cứ giữ nguyên <E> → còn <R> để fix
+   Verify: lens 4/4 (Correctness <a> · Security <b> · Efficiency <c> · Quality <d>) → <T> finding thô → <D> vấn đề sau dedup → bác bỏ <K> (mệnh đề sai) · sửa chứng cứ giữ nguyên <E> → còn <R> để fix
    Test/typecheck: <status> — đầu vào: <số file/test thực chạy>; build fail đã phân loại theo mã lỗi
    Chưa làm: <việc> — <lý do cụ thể: không có tool / bị từ chối quyền / môi trường thiếu>
 
@@ -162,16 +165,22 @@ Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường
 1. Yêu cầu `glab` CLI đã cài: kiểm tra `glab --version`
 2. Lấy thông tin MR + comment đã có:
    - `glab mr view <N> --comments` (hiển thị cả note/discussion đã có)
+   - Số MR do người gõ tay là dữ liệu có thể sai. `state` ≠ opened ⇒ báo trước khi review. User nói các MR là một CẶP/liên đới ⇒ so `source_branch` (hoặc tham chiếu chéo trong mô tả); lệch ⇒ tìm MR đang mở cùng source branch ở repo kia (`glab api "projects/:id/merge_requests?state=opened&source_branch=<branch>"`): khớp duy nhất ⇒ dùng và nói rõ ở dòng đầu output; mơ hồ ⇒ hỏi.
 3. **Ghim revision MỘT lần**, rồi **BẮT BUỘC** lấy diff từ remote bằng `glab mr diff <N>`:
    ```bash
    glab api "projects/:id/merge_requests/<N>" > .git/mr_<N>.json        # sha, source_branch, target_branch
    MR_SHA=$(python -c "import json;print(json.load(open('.git/mr_<N>.json',encoding='utf-8'))['sha'])")
-   git fetch origin <source-branch> <target-branch>
+   git fetch origin <source-branch> <target-branch>     # doc stderr: co "error:"/"couldn't set" => origin/<target> la dau CU
    git cat-file -e "$MR_SHA^{commit}" && echo "da co revision $MR_SHA"
    glab mr diff <N> > .git/mr_<N>.diff
-   grep -E '^(---|\+\+\+) ' .git/mr_<N>.diff | grep -v /dev/null | sort -u   # file doi
+   grep -E '^(---|\+\+\+) ' .git/mr_<N>.diff | grep -v /dev/null | sed -E 's#^(---|\+\+\+) ([ab]/)?##' | sort -u > .git/mr_<N>.glab_files
+   git diff --no-renames --name-only origin/<target-branch>..."$MR_SHA" | sort -u > .git/mr_<N>.git_files
+   diff .git/mr_<N>.glab_files .git/mr_<N>.git_files && echo "danh sach file khop"   # glab mr diff co the bi CAT
    wc -l .git/mr_<N>.diff; grep -c '^@@' .git/mr_<N>.diff                    # phep dem doc lap
+   git log --no-merges --format='%h %an <%ae> %ad %s' --date=short origin/<target-branch>.."$MR_SHA"
    ```
+   - Danh sách file lệch ⇒ `glab mr diff` đã bị cắt (thiếu im lặng): dùng `git diff origin/<target-branch>..."$MR_SHA"` làm nguồn chính và ghi trong output "`glab mr diff` thiếu <k> file". Fetch báo `error:`/`couldn't set` ⇒ lấy đầu target bằng `git ls-remote origin refs/heads/<target-branch>`, `git fetch origin <sha>` và dùng SHA đó thay `origin/<target-branch>`.
+   - Diff gộp nói "cái gì đổi", không nói "vì sao nó ở đây": đọc danh sách commit ở trên, `git show --stat` từng commit. Tác giả lạ (`HOST\user`, email không phải danh tính git thật), ngày ngoài khoảng của ticket, hoặc đụng file không liên quan tiêu đề MR / config máy dev ⇒ commit lạc bị cuốn vào nhánh — finding, kể cả khi mô tả MR không nhắc.
    - Mọi lệnh đọc sau đó dùng **`$MR_SHA`, không bao giờ `FETCH_HEAD`**: `FETCH_HEAD` là MỘT slot dùng chung cho cả repo — bất kỳ fetch nào (kể cả GUI của user) cũng dời nó, và `git show FETCH_HEAD:file` vẫn trả nội dung hợp lệ, chỉ là của revision khác. Hai phép đọc cùng revision mà mâu thuẫn ⇒ nghi REF trước, đừng nghi code. SHA này phải xuất hiện nguyên văn trong output (bước 5).
    - Output của `glab mr diff` **không có header `diff --git`** như `git diff` — `grep '^diff --git'` trả 0 dòng trông y hệt "MR không đổi file nào". Luôn kèm phép đếm độc lập ở trên để phân biệt "không có" với "hỏi sai".
    - **KHÔNG** thay `glab mr diff` bằng `git diff <base>...<source>` so với branch local — `main` (hoặc base) ở local có thể stale, dẫn tới review nhầm hàng trăm commits đã có sẵn trên remote. Cần `git diff` (vd để lấy stat) thì so với `origin/<base-branch>` sau khi fetch, không phải branch local.
@@ -190,6 +199,7 @@ Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường
    > git grep -n "functionName" "$MR_SHA"        # caller trong TOAN repo tai revision do
    > git ls-tree -r --name-only "$MR_SHA"        # cay file (phep lay hieu tap file, phan giai file duoc vien dan)
    > ```
+   > Git Bash (MSYS): `export MSYS_NO_PATHCONV=1` trước các lệnh `<rev>:<path>` — path bắt đầu bằng `.` (`.changeset/`, `.gitlab-ci.yml`, `.env.example`) bị dịch thành path list Windows; dấu hiệu: "unknown revision" mà chuỗi in ra có `\` và `;` — lỗi của đối số, không phải ref chưa fetch.
    > ⚠️ **TUYỆT ĐỐI KHÔNG đọc file ở working tree để lấy context cho MR.** Working tree đang ở nhánh khác — nội dung file có thể khác hoàn toàn với revision của MR. Ghép diff của MR với context của nhánh khác cho ra finding sai mà nghe rất thuyết phục. Chỉ đọc qua `$MR_SHA:` (hoặc sau khi đã checkout đúng nhánh MR). Kỷ luật này đi theo PHÉP ĐO, không theo repo: grep caller sang repo thứ hai thì áp Block 2 bước 5 (MR đồng hành), không đọc working tree của repo đó.
    > ⚠️ Fetch fail (offline / chưa auth) → tụt về mức **Inline** và **nói rõ với user**, đừng im lặng đọc working tree thay thế.
    >
@@ -199,9 +209,10 @@ Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường
    > 1. Chỉ cần ĐỌC file ở revision khác ⇒ `git show`/`git grep` như khối Grounded. Không dựng worktree.
    > 2. Cần build/test ⇒ `git -c core.longpaths=true worktree add --detach "<thư-mục-ngắn-NGOÀI-repo>/wt-<N>" "$MR_SHA"`. KHÔNG nuốt stderr; kiểm thư mục worktree tồn tại trước khi chạy bất cứ gì — dựng hỏng thì báo "không dựng được", không đọc kết quả test (hỏng im lặng trông giống test đỏ).
    > 3. Cài dependency TẠI CHỖ trong worktree (`npm ci` / `pnpm install --frozen-lockfile` / `dotnet restore`). 🚫 **TUYỆT ĐỐI không symlink/junction `node_modules` hay bất kỳ thư mục dùng chung nào** từ cây làm việc sang worktree: trên Windows xoá đệ quy đi THEO link, và workspace monorepo có symlink trỏ ngược về `apps/*`, `packages/*` — đã xoá 869 file đã track (#425) và ruột 99 gói làm sập dev server của phiên khác (#262).
-   > 4. Đột biến/mutation chỉ làm trong worktree, không bao giờ trên working tree của user.
-   > 5. Dọn: `git worktree remove "<wt>"`; long path trên Windows ⇒ `Remove-Item -LiteralPath "\\?\<wt>" -Recurse -Force` rồi `git worktree prune`.
-   > 6. Agent xong ⇒ phiên chính kiểm `git status` của repo user, `git worktree list`, và nếu có dev server đang chạy thì gọi một route THẬT. Đếm thư mục/đếm file không phải kiểm nội dung (#262). Ghi kết quả build/test — hoặc "không chạy" — vào output review.
+   > 4. Chạy suite TUẦN TỰ, không song song với typecheck/lint (test nhạy thời gian đo cả tải máy). Test đỏ ⇒ chạy lại riêng nó, cô lập, ≥2 lần, và `git diff --quiet origin/<target-branch>..."$MR_SHA" -- <file-test> <file-nó-phủ>`: chỉ đỏ lặp lại được VÀ chạm diff mới là finding; còn lại báo "flaky/môi trường, ngoài diff".
+   > 5. Đột biến/mutation chỉ làm trong worktree, không bao giờ trên working tree của user.
+   > 6. Dọn: `git worktree remove "<wt>"`; long path trên Windows ⇒ `Remove-Item -LiteralPath "\\?\<wt>" -Recurse -Force` rồi `git worktree prune`.
+   > 7. Agent xong ⇒ phiên chính kiểm `git status` của repo user, `git worktree list`, và nếu có dev server đang chạy thì gọi một route THẬT. Đếm thư mục/đếm file không phải kiểm nội dung (#262). Ghi kết quả build/test — hoặc "không chạy" — vào output review.
    >
    > **Base cho deep review = target branch của MR**, KHÔNG hỏi `main`/`dev`. Lấy bằng `glab mr view <N>` (field targetBranch) — dự án main-chính ra `main`, dự án dev-chính ra `dev`. Dùng đúng nhánh đó làm `<base>` khi `review the whole branch` (đây là ngữ cảnh reviewer: base đã xác định sẵn từ MR, không thuộc trường hợp "hỏi user" ở Phase 1).
 4. **Phân nhánh theo HAI trục đo được** — đừng hỏi proxy "MR có comment chưa", vì nó gộp hai câu hỏi rời nhau:
@@ -232,13 +243,13 @@ Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường
      git diff --stat "$B" "$MR_SHA"     # = viec CUA MR, da tru moi thu den tu nhanh dich
      ```
      Chỉ đọc kỹ file nằm trong GIAO của (file trong commit mới) và (file trong diff từ merge-base). Phân loại commit theo `diff --stat` so với merge-base, không theo tiêu đề hay số parent. Diff từ merge-base có file lạ hoặc dòng bị XOÁ mà MR không có lý do xoá ⇒ dấu hiệu lượt resolve conflict đã revert code của nhánh đích — finding.
-   - **Đối chiếu issue cũ**: với mỗi issue `#N` đã raise, kiểm tra trong commit/diff mới xem đã được fix chưa. Đánh dấu:
+   - **Đối chiếu issue cũ**: với mỗi issue `#N` đã raise, kiểm tra trong commit/diff mới xem đã được fix chưa — "ca xấu còn tái hiện không?" chưa đủ: áp phép kiểm "fix ĐÚNG" ở Phase 2.5 bước 2 của `review the whole branch` (chỗ fix chạm + consumer phía sau, cổng chặn thử false-positive trên đường hợp lệ, lớp lỗi quét đủ chỗ, schema chạy trên DB có dữ liệu). Đánh dấu:
      - `✓ Resolved #N` — đã fix đúng
      - `❌ Still open #N` — chưa fix, hoặc fix sai/chưa đủ — kèm lý do
      - `⚠️ Partially #N` — fix một phần, kèm điều còn thiếu
      - `🔒 Accepted #N` — giữ nguyên CÓ CHỦ Ý, owner đã chấp nhận rủi ro. Chỉ dùng khi có **con trỏ tới quyết định** (ai chấp nhận, ở đâu: comment/approve/ticket). Chỉ có lời khai của tác giả MR ⇒ ghi `🔒 Accepted (chưa verify — theo comment của tác giả)` và nói rõ reviewer không kiểm chứng được
-   - **Issue mới phát sinh từ commit mới**: đánh số tiếp theo (`#N+1`, `#N+2`, ...), không tái sử dụng số cũ
-   - **KHÔNG** review lại các phần code không thay đổi từ lần review trước (trừ khi liên quan trực tiếp tới issue cũ)
+   - **Issue mới phát sinh từ commit mới**: đánh số tiếp theo (`#N+1`, `#N+2`, ...), không tái sử dụng số cũ. Diff của vòng sửa là **code MỚI**, chưa qua lens nào ⇒ review nó đủ lens theo `Review lenses` (ít nhất Correctness + Quality & Reuse/quy ước), không chỉ "fix có khớp issue cũ không". Commit do chính reviewer/phiên này viết (`%ae`/`%ce` trùng `git config user.email`) ⇒ lens quy ước bắt buộc chạy ở context riêng, đọc file cùng thư mục để học quy ước thật; output ghi rõ issue nào được resolved bởi commit của reviewer
+   - **KHÔNG** review lại các phần code không thay đổi từ lần review trước (trừ khi liên quan trực tiếp tới issue cũ) — review tiếp nối thu hẹp phạm vi CODE, không thu hẹp các góc nhìn
    - Verdict: `APPROVE` nếu mọi `Blocker`/`Major` cũ đã `✓ Resolved` hoặc `🔒 Accepted` và không có `Blocker`/`Major` mới; `REQUEST_CHANGES` nếu còn `Blocker`/`Major` ở trạng thái `❌ Still open`/`⚠️ Partially` hoặc mới phát sinh; `COMMENT` cho phần còn lại. ⚠️ **`Minor` chưa fix và `🔒 Accepted` KHÔNG chặn `APPROVE`** — tính vào thì MR treo vĩnh viễn (severity đo mức nghiêm trọng, không đo trạng thái công việc). Nhưng issue `Accepted` phải được liệt kê lại ở mọi lượt sau: chấp nhận rủi ro không có nghĩa là ngừng nhắc
 5. Output format thống nhất — dòng `**Reviewed at:**` là **bắt buộc** ở mọi lượt (A lẫn B): output này là ĐẦU VÀO của lượt sau, nên phải tự mang mốc mà lượt sau cần, không trông vào việc phiên sau còn nhớ. Trước khi đưa ra, chạy khối "Tự soát chính báo cáo" ở Step 4 của `review the last change` (con số đo được vs câu chữ mô tả cùng hiện tượng):
    ```
@@ -269,7 +280,11 @@ Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường
 > 🚫 **KHÔNG chèn AI attribution** vào comment (Co-Authored-By Claude, 🤖 Generated with, link claude.com, ...). Comment = chỉ nội dung review thuần, KHÔNG signature/footer.
 
 1. Lấy chính output Markdown từ bước "review the MR" trước đó (đã đúng format, không cần soạn lại). Nếu là review tiếp nối (mode B), giữ nguyên cả phần "Trạng thái issue cũ" — đó là context quan trọng cho dev. **Giữ nguyên dòng `**Reviewed at:** <sha>`** — lượt review sau lấy mốc từ đó.
-2. **Self-check trước khi đăng**: scan output Markdown, đảm bảo không có keyword `Claude`, `Anthropic`, `🤖`, `Generated with`, `Co-authored-by:`, `claude.com`. Có → xóa. Quét bí mật theo **giá trị thật** (mục `Safety rules` ở `gitlab-flow`) — review hay trích nguyên dòng config/code, và comment là nội dung đã publish.
+2. **Self-check trước khi đăng — phải CHẶN được lệnh post**, không chỉ in ra: chạy ở tool call RIÊNG, chỉ sang bước 3 khi nó không in gì. 🚫 Không bao giờ nối check với post bằng `;` (grep exit 0 nghĩa là ĐÃ khớp — ngược ý "kiểm qua"). Tên file repo (`CLAUDE.md`, `.claude/`) được bóc trước nên không khớp nhầm:
+   ```bash
+   sed -E 's#\.?claude(\.md|/)##Ig' review.md | grep -niE 'claude|anthropic|🤖|generated with|co-authored-by' && { echo "BLOCKED: attribution"; exit 1; }
+   ```
+   Có → xóa rồi chạy lại. Quét bí mật theo **giá trị thật** (mục `Safety rules` ở `gitlab-flow`) — review hay trích nguyên dòng config/code, và comment là nội dung đã publish.
 3. Đăng comment. Output review là markdown dài tiếng Việt ⇒ **KHÔNG đẩy qua argv** (argv/pipe của PowerShell làm hỏng dấu; hỏng theo shell chứ không theo lệnh, và comment đã đăng thì khó rollback êm). Đi đường file — lý do đầy đủ: `create a merge request` bước 3 ở `gitlab-flow`:
    ```bash
    # review.md ghi bang tool Write (UTF-8, KHONG BOM); python chi nhan path TUONG DOI (khong dung /c/... cua MSYS)
@@ -279,7 +294,13 @@ Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường
    ```
    - Thiếu `-H "Content-Type: application/json"` ⇒ HTTP 415 và **không post gì**. Lệnh báo lỗi hay không, **đọc lại danh sách note**, so độ dài + đoạn đầu/cuối với `review.md`, rồi mới coi là xong hoặc mới thử lại — retry mù là comment trùng.
    - Text ngắn không dấu: `glab mr note <N> --message "<text>"` vẫn là lệnh chính. Trên glab 1.93.0 cờ `--message` in cảnh báo deprecated (exit 0, cùng luồng với URL kết quả), còn `glab mr note create` mà cảnh báo chỉ tới tự khai là **experimental** — chưa đổi, giữ lệnh cũ cho tới khi bản mới rời nhãn experimental hoặc bản cũ bị gỡ.
-4. Nếu APPROVE: `glab mr approve <N>`
+4. Nếu APPROVE: **cổng danh tính trước** `glab mr approve <N>` (chạy lúc bước 2, trước khi post, để note mang được kết quả) — review độc lập về context không phải độc lập về danh tính, và GitLab chỉ thấy danh tính:
+   ```bash
+   glab api user                                                   # username, email cua tai khoan glab
+   B=$(git merge-base origin/<target-branch> "$MR_SHA")
+   git log --format='%h %ae %ce %s' "$B".."$MR_SHA"                # phan code dang duoc duyet
+   ```
+   `author.username` của MR (`.git/mr_<N>.json`) trùng username đó, HOẶC có commit trong phạm vi mà `%ae`/`%ce` trùng email đó hay `git config user.email` (reviewer đã tự push fix) ⇒ **KHÔNG approve**: note ghi "approve để reviewer khác — <tác giả là tài khoản này / các fix #… do reviewer tự push>", báo user; chỉ approve khi user ra lệnh rõ sau khi thấy lý do.
 5. Nếu REQUEST_CHANGES với toàn bộ issue cũ đã `✓ Resolved` (chỉ còn issue mới): nói rõ trong comment để dev biết phần fix trước đã OK
 
 ### "merge the request"

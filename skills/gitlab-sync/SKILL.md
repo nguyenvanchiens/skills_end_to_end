@@ -487,6 +487,7 @@ Nếu sau này 1 trong các flow trên trở nên thường xuyên + hay conflic
 - 🚫 **KHÔNG `git push --force`** vào `main`, `builds/dev/*` — kể cả `--force-with-lease`. Reset chỉ làm khi user/Maintainer chủ động ra lệnh
 - 🚫 **KHÔNG `git merge --strategy=ours` / `-s ours`** để "fake resolve" — sẽ skip thay đổi thật, gây lệch code thầm lặng, và xoá luôn state riêng của nhánh đích (version, config build)
 - 🚫 **KHÔNG merge / tái dùng nhánh `sync/*` còn sót** mà không kiểm base của nó chứa `origin/main` hiện tại (Step 2)
+- ✅ **Chỉ tin `origin/*` khi fetch sạch**: đọc stderr của `git fetch` — có `error:`/`couldn't set` thì ref đó có thể còn đầu CŨ, và `git log`/`merge-base` trên nó cho kết luận sai ("chưa lên build", "không có gì để sync"). Lấy đầu thật bằng `git ls-remote origin refs/heads/<nhánh>`, `git fetch origin <sha>`, so trên SHA đó (luật fetch dùng chung ở `gitlab-flow` → mục *Fetch lỗi & ref remote (luật dùng chung)*)
 - ✅ **Đọc lại nhánh trong cùng lệnh với `git commit`** — chỉ commit khi đang ở `sync/*` (Step 5)
 - ✅ **Trước push / tạo MR**: quét bí mật theo giá trị thật (mục `Safety rules` ở `gitlab-flow`) — sync chỉ chuyển commit đã có nên rủi ro thấp hơn, nhưng file resolve conflict là nội dung mới
 - 🚫 **KHÔNG dùng `git checkout --ours <file>` cho code logic** mà không đọc qua diff — chỉ dùng khi đã xác nhận phía main đúng

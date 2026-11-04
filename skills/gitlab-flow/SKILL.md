@@ -76,18 +76,38 @@ Quy trình chuẩn cho một feature/bugfix mới. Có 2 vai trò: **Developer**
 - Trước khi hỏi, chạy `git branch -r` để gợi ý option đúng tên thật trên remote (vd thấy `origin/develop` thì hỏi "`main` hay `develop`?"). Nếu user gõ tên khác (vd `staging`) → tôn trọng.
 - ⚠️ **Lọc theo VAI, không chỉ theo tên.** Khớp chữ "dev" không có nghĩa là nhánh tích hợp: nhánh khớp tiền tố deploy/release (`build/*`, `builds/*`, `release/*`, `deploy/*`, `prod*`) — đúng loại nhánh mà `gitlab-sync` / `gitlab-cherrypick` đẩy code VÀO — **không được đưa vào danh sách option base**. Muốn nêu thì phải kèm nhãn "nhánh deploy, không phải nhánh tích hợp". Rẽ nhánh feature từ đó là mang commit đặc thù deploy vào MR ngược về `main`. Cùng bộ lọc áp cho mọi chỗ hỏi lại `<base>` (target MR, `gitlab-review`).
 - ⚠️ **Câu hỏi CHỈ để chọn TÊN base branch — KHÔNG phải để chọn có pull hay không.** Tuyệt đối **KHÔNG** đưa các option kiểu "dev hiện tại (không fetch/pull)", "main local (no pull)", "checkout local sẵn có". Mỗi option = một tên branch (`main`, `dev`, `develop`...). Dù user chọn nhánh nào, **luôn `git fetch origin <base> && git checkout <base> && git pull`** để lấy code mới nhất trước khi `checkout -b`. Tạo branch từ base chưa pull = sai (branch ra từ commit cũ).
-  - Ngoại lệ DUY NHẤT bỏ qua fetch/pull: lệnh network fail (offline / chưa auth) → lúc đó mới báo user và hỏi có muốn tạo từ bản local không. Không bao giờ đưa "no pull" thành lựa chọn mặc định.
+  - `fetch`/`pull` thất bại ⇒ phân loại theo NGUYÊN NHÂN, không theo mã thoát (lệnh cập nhật MỌI ref, mã thoát là AND trên cả tập):
+
+    | Thất bại vì | Hành động |
+    |---|---|
+    | Network / auth (offline, 403, DNS) | Báo user, hỏi có muốn tạo từ bản local không. Không bao giờ đưa "no pull" thành lựa chọn mặc định |
+    | Ref KHÁC `<base>` hỏng (`couldn't set 'refs/remotes/origin/<x>'`, `unable to update local ref`) | Không kết luận gì từ mã thoát: chạy phép đo ở `Fetch lỗi & ref remote (luật dùng chung)`, khớp ⇒ tiếp tục, báo ref hỏng như việc riêng cần dọn |
+    | Chính `<base>` không fetch được | Dừng, báo user |
+
 - Một khi user đã chọn `<base>` cho lần tạo branch này, dùng **nhất quán** cho cả vòng đời branch đó: checkout gốc khi tạo, `--target-branch` của MR, `git merge-base <base> HEAD` khi review whole branch (skill `gitlab-review`), và checkout sau khi merge.
 - ⚠️ **Bộ nhớ `<base>` chỉ tồn tại trong 1 session.** Nếu trigger sau (vd `create a merge request`, hoặc `review the whole branch` / `merge the request` ở skill `gitlab-review`) chạy ở **session khác** với lúc tạo branch → skill **KHÔNG còn nhớ** `<base>`. Lúc này **phải HỎI lại** user (`main` hay `dev`), tuyệt đối **không mặc định `main`**. Chỉ bỏ qua hỏi nếu `<base>` đã được xác lập trong chính session đang chạy.
+
+### Fetch lỗi & ref remote (luật dùng chung)
+
+Nguồn duy nhất cho cả họ: base trước khi tạo nhánh, `merge-base` khi review, "commit X đã lên
+nhánh Y chưa" ở `gitlab-sync` / `gitlab-cherrypick` / audit build.
+
+- **Đọc stderr của `git fetch`/`pull`**, không chỉ mã thoát. Có `error:` / `couldn't set` ⇒ ref
+  `origin/*` có thể còn đầu nhánh CŨ trông y như mới — không dùng nó để kết luận.
+- Kết luận về remote ⇒ hỏi chính remote: lấy SHA bằng `git ls-remote origin refs/heads/<Y>`, rồi
+  `git fetch origin <sha>` và đo trên SHA đó.
+- Xác nhận base đã mới: so `git rev-parse <base> origin/<base> FETCH_HEAD` với
+  `git ls-remote origin refs/heads/<base>`. **Bắt buộc có vế `ls-remote`** — ba ref local khớp
+  nhau cả khi cùng cũ.
 
 ### Target branch
 - MR luôn merge vào `<base>` (mặc định `main`) trừ khi user chỉ định khác
 
-### Output language (review & report)
+### Output language (mọi trigger)
 
-**Mặc định tiếng Việt** cho mọi output của các trigger review/report — kể cả khi user gõ trigger bằng tiếng Anh ("review the last change", "review change simplify"...). User KHÔNG cần phải nhắc lại bằng tiếng Việt mới nhận được output tiếng Việt.
+**Mặc định tiếng Việt** cho mọi output của MỌI trigger trong họ `gitlab-*` (create/rename branch, gỡ conflict, commit, MR, review/report, sync, cherry-pick) — kể cả khi user gõ trigger bằng tiếng Anh ("create branch from task", "review the last change"...). User KHÔNG cần phải nhắc lại bằng tiếng Việt mới nhận được output tiếng Việt. Ngoại lệ chỉ là danh sách giữ tiếng Anh bên dưới.
 
-| Áp dụng cho | Phần phải tiếng Việt |
+| Ví dụ | Phần phải tiếng Việt |
 |---|---|
 | `review the last change` / `review change` (± simplify) | Tóm tắt Step 0 simplify pass + danh sách issue `#1`, `#2`... (vấn đề + đề xuất fix) |
 | Tóm tắt sau `fix all issues` | Danh sách issue đã fix + đề xuất commit message |
@@ -158,18 +178,32 @@ Mỗi flag chỉ chạy khi diff khớp tình huống ở đầu dòng. Chúng l
 - **Mã trạng thái đọc từ hệ ngoài** ⇒ giá trị MẶC ĐỊNH của kiểu rơi vào nhánh nào? `int` với `0 = OK`, `bool HasError`, enum có thành viên đầu là trạng thái tốt ⇒ fail-open ⇒ flag. Câu hỏi nhanh: *trường này biến mất khỏi response thì code tin điều gì?*
 - **Dòng tự nhận là chốt chặn** (chú thích "để…", "tránh…", "bảo vệ…", "không lệch…"; bước xác minh trong runbook) ⇒ nó có thể đang MỞ mà chú thích nói đang chặn. Dựng đúng ca nó nói chặn rồi đo (Step 3); không dựng được ca đó cũng là finding.
 - **Thêm đường gọi / chế độ chạy / entry point mới** ⇒ grep tài liệu, chú thích, header file cấu hình mô tả đường CŨ như đường duy nhất — kể cả file ngoài diff. Dấu hiệu: "(tự …)", "chỉ cần …", "luôn …", hoặc tên đúng một file trong khi nay có hai.
-- **Job / tác vụ định kỳ** (thêm/sửa class job) ⇒ bắt buộc mở file LỊCH CHẠY tương ứng — tìm theo đường dẫn cấu hình job + grep tên class, không suy theo tên file, và nó có thể nằm ở project khác. So độ phân giải của bộ lọc "đến hạn" với chu kỳ chạy: lọc theo ngày + chạy theo phút ⇒ mỗi lượt chạy là một lần lặp. Phải có MỘT trong hai: state "đã xử lý" ghi bền, hoặc cổng khớp giờ. Tác dụng phụ ra ngoài (email/SMS/webhook/thanh toán) thiếu cả hai ⇒ `Blocker`/`Major`. Job anh em trong cùng file lịch là tiền lệ chống lặp của repo. (Báo cáo "gửi lặp": phân biệt *N lượt chạy × 1* với *1 lượt × N phần tử* bằng TỔNG số dòng trên cả khoảng, không bằng cụm timestamp.)
+- **Job / tác vụ định kỳ** (thêm/sửa class job) ⇒ bắt buộc mở file LỊCH CHẠY tương ứng — tìm theo đường dẫn cấu hình job + grep tên class, không suy theo tên file, và nó có thể nằm ở project khác. So độ phân giải của bộ lọc "đến hạn" với chu kỳ chạy: lọc theo ngày + chạy theo phút ⇒ mỗi lượt chạy là một lần lặp. Phải có MỘT trong hai: state "đã xử lý" ghi bền, hoặc cổng khớp giờ. Tác dụng phụ ra ngoài (email/SMS/webhook/thanh toán) thiếu cả hai ⇒ `Blocker`/`Major`. Job anh em trong cùng file lịch là tiền lệ chống lặp của repo. (Báo cáo "gửi lặp": phân biệt *N lượt chạy × 1* với *1 lượt × N phần tử* bằng TỔNG số dòng trên cả khoảng và khoảng cách giữa các cụm so với chu kỳ, không bằng cụm timestamp — tầng queue tự giãn thời điểm. Các dòng trong cụm có cùng khoá nghiệp vụ không ⇒ mở nội dung ra so, đừng suy từ subject/nhãn. N×1 ⇒ state/cổng giờ; 1×N ⇒ gộp theo khoá nghiệp vụ.)
+- **Tắt / comment / no-op một lời gọi có tác dụng ra ngoài** (gửi mail, gọi API, publish MQ) ⇒ đọc tới hết hàm và caller tìm code GHI NHẬN kết quả (set trạng thái "đã gửi", lưu id trả về, event/audit, trả `Ok` cho bên retry). Còn ⇒ tắt luôn phần ghi nhận và trả lỗi/cờ rõ (kiểm hệ quả với retry), hoặc hỏi — tắt lời gọi mà giữ ghi nhận là làm giả kết quả.
+- **Giá trị từ "chỉ được mang theo" thành "được đọc"** (biến chỉ capture vào lambda/closure nay deref lúc render, bỏ `?.`, destructuring) ⇒ kiểm nguồn có thể null không; tuổi của dòng khai báo không chứng minh gì vì chưa ai từng đọc nó. Template có error boundary ⇒ NRE mức ô xoá trắng cả vùng ⇒ nâng severity.
+- **Diff GỠ một hành vi bị coi là sai** (bỏ field khỏi DTO, bỏ fallback/gán mặc định, siết phép kiểm, xoá nhánh tương thích) ⇒ hỏi "nếu luôn sai, vì sao chưa ai kêu?": liệt kê dữ liệu/luồng đang sống NHỜ nó — nhất là bản ghi cũ hơn code, chỉ đầy ở cột mà code hiện tại không đọc.
+- **Guard mới / bị siết / phép đếm bị mở rộng** ⇒ (a) người dùng thoát trạng thái bị chặn bằng cách nào, trạng thái đó kéo dài bao lâu? Phụ thuộc hỏng, BE/MR chưa deploy, thiếu quyền ⇒ vô hạn: guard làm chết hành động CHÍNH là finding — so ba phương án (chặn · cho làm kèm cảnh báo · rút phần nói sai khỏi đầu ra) và tìm quan điểm sẵn có của repo trước khi chọn chặn. (b) Câu thông báo còn gọi đúng tên thứ nó đếm không — số cộng từ nhiều nguồn mà danh từ vẫn một loại ⇒ finding; test thường chỉ kiểm guard CÓ nổ, nên đọc câu trả về trên một request thật.
+- **Lời biện minh dựa trên SỐ ĐO / thông báo lỗi / log** (chú thích, commit, mô tả MR: "làm đỏ N ca", "DB báo lỗi FK", "không ai ghi từ 2021") ⇒ số đó đo ĐƯỜNG / HỆ / PHƯƠNG ÁN nào? Khác thứ đang bàn (script nạp dữ liệu vs luồng API, DB cũ vs DB mới, phương án rộng vs bản hẹp) ⇒ chưa có cơ sở: grep chứng minh đường kia sinh ra được đúng lỗi đó, hoặc tự đo lại. Thí nghiệm đã lùi mà hàm còn lại không caller với doc khẳng định một bất biến ⇒ `Major`: nó nói dối về hệ thống.
+- **Code dựa vào hành vi của dịch vụ NGOÀI repo** (cơ chế bù retry/fallback/poll, tham số lọc gửi sang API ngoài) ⇒ hợp đồng thật theo thứ tự tin cậy: source dịch vụ (`ls` cạnh repo, repo anh em cùng thư mục cha) > OpenAPI đang chạy > tài liệu. Port từ hệ cũ ⇒ chép ĐIỀU KIỆN kích hoạt, không chỉ con số (số lần, khoảng chờ). Không có source ⇒ "cần xác nhận" thành ma trận gọi thẳng endpoint: mỗi tham số × {rỗng, hợp lệ, biến thể ngữ nghĩa, rác} — đổi input mà output y hệt = tham số bị bỏ qua (loại trừ cache trước).
+- **Mốc chuyển đổi suy từ dữ liệu** (lần ghi đầu của bản mới, dấu ghi phân biệt bản cũ/mới) ⇒ hỏi bản cũ và mới có chạy CHỒNG LẤN không (rolling, blue/green, consumer chung hàng đợi), và điều kiện "dừng hẳn bản cũ" còn ghi trong runbook không.
+- **Ghi xuống bảng không do migration của repo quản lý** (legacy/dùng chung) ⇒ đặt cạnh nhau độ dài cột NGUỒN và ĐÍCH (`information_schema.columns`), `@@sql_mode` (strict ⇒ lỗi; không strict ⇒ cắt ngầm — cả hai là finding), đếm bản ghi thật vượt ngưỡng. Có số đếm thì không cần ghi thử vào DB dùng chung.
+- **Commit sinh từ vòng sửa theo review** ⇒ code mới chưa qua lens nào, soi như code gốc: lý lẽ trong commit đã áp cho mọi nhánh cùng hình dạng chưa; nhánh trước không tới được nay tới được ⇒ coi là code chưa từng chạy.
 
 **Security**
 - **Cổng kiểm mới nối tiếp cổng cũ, cùng một khoá** (username, mã khách hàng, tenant) nhưng đi đường tra cứu khác ⇒ mở CẢ HAI đường xuống tới tận chỗ chạm DB/API, đối chiếu phép chuẩn hoá khoá (strip prefix, trim, lower, split) — nó thường nằm ở tầng repository, không ở hàm đang đọc. Lệch ⇒ `Blocker`: fail-closed nên hỏng im lặng dưới dạng "từ chối đúng quy trình".
 - **Validator nhận nhiều dạng đầu vào** ("cho tiện", "cũng chấp nhận", `||` nới lỏng) mà không chuẩn hoá NGAY tại chỗ kiểm ⇒ đi theo giá trị tới từng chỗ dùng; có chỗ phân biệt được hai dạng (vd chuỗi `'false'` là truthy) ⇒ `Blocker`.
 - **Trường trở thành có nghĩa ĐIỀU KHIỂN** (chọn kho/bucket/tenant/endpoint/bảng/hàng đợi — dấu hiệu: bản sửa biến một hằng số thành biến) ⇒ liệt kê MỌI đường giá trị đó vào hệ thống (request body, cột DB, cấu hình, message queue, mặc định) và chỗ kiểm của từng đường. Khoá đường ghi mà để hở đường đọc là chưa xong.
+- **Giá trị RỜI hệ mình để hệ khác diễn giải** (đường dẫn, URL, lệnh shell, tên bảng, khoá cache, header) ⇒ kiểm bằng ALLOWLIST hình dạng hợp lệ, không denylist — bên kia chuẩn hoá trước khi dùng (Windows cắt dấu cách/chấm cuối nên `".. "` thành `..`); hình dạng hợp lệ đã ghi trong repo (doc, hàm sinh) chính là allowlist. Hành vi thư viện quyết định finding ⇒ chạy thử nhỏ, không nhớ.
+- **Nới một luật kiểm ở hàm dùng chung** (thêm nhánh chấp nhận, tách chuỗi, chuẩn hoá thêm, bỏ điều kiện) ⇒ với TỪNG caller: dữ liệu đến từ đâu (vận hành cấu hình / người dùng nhập / hệ thống sinh), dữ liệu hỏng trước rơi vào nhánh nào, sau rơi vào đâu. Loại → chấp nhận = fail-closed → fail-open; ở luồng mang thông tin nhạy cảm ⇒ `Blocker`. Cơ chế (tách, khử trùng) được ở hàm chung; chính sách (chuỗi nào là danh sách, rỗng có là lỗi) phải ở caller.
 
 **Efficiency**
 - **Diff đặt giới hạn cho lời gọi ra ngoài** (timeout, retry, số lần thử, batch, mức song song) ⇒ tra tầng khởi tạo dùng chung trước (handler/policy mặc định, interceptor): núm mới nằm TRONG hay NGOÀI cái đã có? Tầng dùng chung có retry ⇒ thao tác có idempotent không — lệnh không idempotent bị retry là nhân đôi tác dụng phụ.
+- **Đề xuất gộp lời gọi đơn lẻ thành lời gọi gộp** (N+1 → batch) ⇒ đọc thân CẢ HAI hàm, so bộ lọc ngầm (`!Deleted`, `Active`, tenant), cache, số phần tử/thứ tự trả về, hành vi khi không tìm thấy. Khác bất kỳ điểm nào ⇒ finding kiêm đổi hành vi, nêu riêng kèm chiều (siết/nới) — không để auto-fix áp như tối ưu vô hại.
+- **Chú thích / mô tả MR khẳng định về tầng dưới** (SQL sinh ra, index có được dùng, số round-trip, cache hit) ⇒ unit test không chạm tới: đòi số đo (vd `ToQueryString()` với đúng provider); không có ⇒ finding, nặng hơn khi quyết định thiết kế dựa vào nó.
 
 **Quality & Reuse**
 - **Component/hàm dùng chung mang nội dung của caller ĐẦU TIÊN** (nhãn, danh từ thực thể, đơn vị, thông điệp hardcode trong thân) ⇒ consumer thứ hai sai nhãn mà kiểu/lint đều xanh. Phép kiểm rẻ khi MR bắt đầu dùng lại một component: grep chuỗi ký tự trong thân nó. Tham số hoá bằng tham số **bắt buộc**, không default — default giữ đúng caller cũ và để caller mới sai im lặng.
+- **Đề xuất thay code tự viết bằng helper dùng chung** ⇒ đọc THÂN helper, không đọc tên nó hay tên khoá cấu hình (`timeZone`, `strict`, `validate` có thể là no-op); so hành vi hai bên ở ca biên (null, chuỗi thiếu offset, sentinel). Gộp hai call site vào một helper ⇒ hỏi chúng có cùng KHÁI NIỆM không (thời điểm vs ngày lịch dù cùng kiểu `string`).
 
 ### Resolve conflict (luật dùng chung)
 
@@ -195,12 +229,17 @@ trước có conflict.
 
 Áp cho **MỌI thao tác script đọc rồi ghi đè file** — resolve conflict chỉ là một trường hợp
 (patch hàng loạt, đổi tên, chèn khai báo cũng cùng cơ chế hỏng). Sửa tay thì bỏ qua mục này.
+Verify chung cho sửa bằng script/codemod (anchor chứa định danh đích, assert số lần thay, giới
+hạn trong hàm, in từng chỗ đã thay) ⇒ nạp skill `mechanical-change-verification`; mục này chỉ
+giữ phần tầng byte (EOL/BOM).
 
 1. **Ghi lại đúng trạng thái byte của TỪNG file.** Đọc binary, ghi nhận BOM + kiểu EOL của
    từng file rồi ghi lại y như vậy; **không áp một encoding chung cho cả lô**. Python:
    `open(..., newline='')`, encoding `utf-8` — **KHÔNG** dùng `utf-8-sig` cho cả lô: nó ăn mất
    BOM của file có và (khi ghi) thêm BOM vào file vốn không có — thay đổi không ai yêu cầu.
-2. **Đừng chèn `\n` thô vào file toàn CRLF** — sinh ra một dòng lone-LF lẫn vào giữa.
+2. **Đừng chèn `\n` thô vào file toàn CRLF** — sinh ra một dòng lone-LF lẫn vào giữa. Và phạm vi
+   GHI phải bằng phạm vi KHỚP: `sed -i` trên glob ghi lại MỌI file trong glob (Git Bash đổi
+   CRLF→LF cả file không khớp) ⇒ `grep -l PATTERN <glob> | xargs sed -i ...`.
 3. **Verify bằng ĐẾM BYTE:**
 
 ```python
@@ -273,6 +312,11 @@ create branch → code → review the last change → fix all issues → [commit
   tự đi tới (kể cả commit sau fix — user tự gõ `commit and push` thì chính đó là xác nhận), push,
   mọi thứ ghi ra remote (tạo MR, post comment), merge. Hai cổng liền nhau được gộp chung một câu
   hỏi ("push và tạo MR?").
+- Mắt sau tự kiểm mắt trước, không tin là nó đã chạy: cổng ra (`commit and push`, `create a merge
+  request`) kiểm `review the last change` đã chạy trên ĐÚNG diff này chưa (Step 1 của `Commit and push`).
+- Bước bắt buộc do user đặt (memory, CLAUDE.md — vd Playwright sau mỗi lượt sửa) chỉ user miễn
+  được. Tin là nó không áp cho thay đổi này ⇒ hỏi một câu, hoặc thay bằng phép kiểm tương đương
+  (E2E qua API thật khi không có UI); không tự lập luận để bỏ rồi trình như quyết định kỹ thuật.
 - User có quy trình khác ⇒ họ ghi đè mục này một lần, không phải nhắc lại từng bước mỗi ticket.
 
 ### "create branch <name>" hoặc "create branch from task <TASK-ID>..."
@@ -341,6 +385,7 @@ create branch → code → review the last change → fix all issues → [commit
 |---|---|
 | Mode A/B branch >50 chars | Warn user nhưng **KHÔNG ép sửa** — user đã chủ động chọn |
 | Mode C sau khi trim vẫn >50 chars | Đề xuất viết tắt (`qty` thay `so-luong`, `co` thay `checkout`) hoặc bỏ phạm vi |
+| Task nêu tên hệ/phiên bản (v3/v5, tên app) mà có >1 repo ứng viên, hoặc định chuyển branch sang repo khác | Kiểm danh tính repo TRƯỚC khi tạo/chuyển: tên solution/csproj, namespace, remote URL so với định danh trong task. Repo user đưa "để đọc" không phải repo sẽ sửa |
 | Mode C sau khi drop filler còn **0-1 từ key**, hoặc chỉ còn tên dự án/repo/danh từ chung | **STOP, KHÔNG đề xuất candidate.** Hỏi user 1 câu task thật sự làm gì. 🚫 Cấm giữ lại filler vừa drop để lấp, cấm suy nội dung từ tên dự án. "Không đủ từ key" là kết quả hợp lệ. Title rỗng nghĩa hay đi cùng ID gõ nhầm/tái dùng ⇒ chạy luôn phép dò TASK-ID ở Step 4 |
 | TASK-ID đã xuất hiện ở nhánh remote/local hoặc `git log --all` | Báo nhánh/commit trùng, **hỏi user trước khi tạo** (Step 4.2) |
 | TASK-ID không match pattern `[A-Z][A-Z0-9]+-\d+` | STOP, hỏi user |
@@ -407,6 +452,11 @@ cat "$(git rev-parse --git-dir)/MERGE_MSG" 2>/dev/null   # cho biet merge tu dau
 `MERGE_MSG` là chỗ duy nhất nói rõ chiều merge khi đã ở giữa conflict. Không đọc nó thì rất
 dễ resolve ngược (giữ phía feature khi đáng giữ phía main).
 
+Nhánh feature đứng lâu ⇒ trước khi merge, đếm file theo thư mục gốc cấp 1 ở cả hai bên
+(`git ls-tree -r --name-only <ref> | cut -d/ -f1 | sort | uniq -c`). Tập thư mục gốc lệch (vd
+`src/` ↔ `apps/*/src/`) ⇒ DỪNG, báo user: đó là port chứ không phải merge — hai cây đường dẫn
+không chạm nhau nên merge sạch 0 conflict và đẻ ra code chết.
+
 **Step 2 — Phân loại từng file conflict**:
 
 ```bash
@@ -442,9 +492,14 @@ git status        # bao lai cho user
 
 ### Sinh code từ mô tả task
 - Khi user paste mô tả task Jira làm prompt, đọc kỹ và xác nhận lại scope trước khi code nếu có chỗ mơ hồ
+  - Loại trừ phạm vi bằng thuật ngữ nghiệp vụ ("bỏ qua CCDC") ⇒ quy về màn/đường dẫn cụ thể theo menu UI (không theo tên loại trong code) và hỏi xác nhận một câu. Reviewer báo "chỗ X sót" mà lý do bác là lời dặn loại trừ ⇒ kiểm X có thật thuộc phần bị loại không
+  - Câu hỏi làm rõ chứa bảng/cột/enum do mình TỰ suy từ code ⇒ đặt nguồn vào phần LỰA CHỌN ("lấy từ X hay Y?"), không vào đề bài — đề bài được mặc nhận không kiểm rồi mang nhãn "đã chốt" qua mọi tầng review. Giao review cho subagent ⇒ ghi rõ phần user chốt vs phần mình suy luận
+- User nêu phương án khác phương án đang có trong code ("thử X xem", "dùng X đi") ⇒ mặc định là chỉ thị ĐỔI: làm, kiểm, báo hệ quả; chỉ hỏi lại khi không đảo ngược được. Còn câu hỏi treo về đúng thứ sắp push ⇒ chưa push/review thứ đó
 - Code theo convention của project (tham khảo CLAUDE.md nếu có, hoặc đọc file gần khu vực sửa để bắt chước style)
+  - Tìm tiền lệ cho VẤN ĐỀ, không cho giải pháp mình đã chọn: bẫy của framework ⇒ grep theo DẤU HIỆU của bẫy, đề xuất theo pattern đa số kèm số chỗ. "Làm cho app B có X giống app A" ⇒ diff mọi file cấu hình per-app của A (`git ls-files <A-dir>`) với B — file user đưa là ví dụ, không phải danh sách; so theo cấu trúc, không theo từ khoá
+- Thay đổi định làm khớp tình huống nào ở **Flag kích hoạt theo tình huống** (dưới `Review lenses`) ⇒ áp flag đó ngay khi viết, đừng đợi review bắt. Chú thích TẠI SAO cũng vậy: câu về tầng dưới (SQL sinh ra, index, hiệu năng) ⇒ đo rồi ghi số đo, hoặc đừng viết
 - Không thêm tính năng/refactor ngoài scope task
-- Sau khi xong, tóm tắt ngắn các file đã thay đổi
+- Xong code ⇒ tóm tắt ngắn các file đã thay đổi rồi đi tiếp mắt kế theo `Chuỗi mặc định giữa các trigger` — tóm tắt không phải điểm dừng
 
 ### "review the last change" / "review change" (+ optional "simplify")
 
@@ -467,15 +522,15 @@ Trigger match là lenient: thêm từ `simplify` bất kỳ vị trí trong câu
 3. **Grounding convention**: đọc `CLAUDE.md` (nếu có) + 1-2 file lân cận cùng thư mục/module để học convention THẬT của repo — đừng áp convention generic.
 4. **Grounding task**: nếu mô tả task (Jira) đã có trong hội thoại → dùng làm chuẩn "logic đúng/đủ chưa". Nếu CHƯA có và định đánh giá logic/edge-case → hỏi user 1 câu ngắn về mục tiêu task, hoặc nói rõ "review này chỉ xét quality/efficiency, không phán logic vì thiếu spec".
 5. **Grounding NGOÀI diff** — diff chỉ cho thấy phần đã đổi; các lỗi dưới đây nằm ở chỗ diff không chạm:
-   - a. Hàm/API/schema đổi signature hoặc behavior ⇒ grep **mọi caller**, kể cả file ngoài diff. Field/cột bị gỡ khỏi mọi đường GHI mà vẫn còn trong model/DB (diff chỉ có dòng `-` cho field đó) ⇒ grep **tên field trần** toàn repo để liệt kê bên ĐỌC — bên đọc không phải caller của hàm nào nên grep chữ ký không thấy.
+   - a. Hàm/API/schema đổi signature hoặc behavior ⇒ grep **mọi caller**, kể cả file ngoài diff. Field/cột bị gỡ khỏi mọi đường GHI mà vẫn còn trong model/DB (diff chỉ có dòng `-` cho field đó) ⇒ grep **tên field trần** toàn repo để liệt kê bên ĐỌC — bên đọc không phải caller của hàm nào nên grep chữ ký không thấy. Chiều ngược: giá trị từ request/client mà diff lưu hoặc truyền đi ⇒ lần tới SINK cuối (filesystem, SQL thô, shell, URL, xoá dữ liệu) kể cả helper có sẵn ngoài diff; sink không tự validate thì MR mở đường mới tới lỗ cũ ⇒ tính cho MR.
    - b. Kết luận **PHỦ ĐỊNH** ("không caller nào", "không có luật", "chưa ai dùng") ⇒ xác nhận bằng phép quét thứ hai rộng hơn hẳn (bỏ mọi bộ lọc đường dẫn), và ghi phạm vi đã quét vào chính kết luận. Kết quả MỘT PHẦN (lệnh vẫn ra vài dòng) nguy hiểm hơn kết quả rỗng: nó tắt mọi nghi ngờ.
    - c. Caller ở **REPO KHÁC** ⇒ phân giải nhánh/MR đồng hành trước khi kết luận "phía kia chưa sửa": `glab mr list` ở repo đó tìm cùng TASK-ID/tên nhánh → không có thì `git ls-remote --heads origin | grep <TASK-ID>` → có thì fetch vào ref riêng và đọc ở đó, **không** đọc working tree của repo đó (nó đang đứng ở nhánh ngẫu nhiên). Đã có bản sửa ở MR đồng hành ⇒ `Blocker` → `Major` với bản chất khác: **ràng buộc thứ tự deploy**.
    - d. MR dựng từ **MỘT MẪU**:
      - file tự khai "mirror/port/copy từ X" ⇒ với từng cặp hàm tương ứng, diff **GUARD** (early-return, `await` trước khi build payload, cờ đang-xử-lý, `?.`/`??`, điều kiện trước `setState`), không diff toàn file; đọc chú thích quanh guard ở X — nó thường ghi cơ chế lỗi đã gặp, dùng làm bằng chứng severity. Độ trùng thấp giữa hai file KHÔNG loại trừ guard bị rơi.
-     - bám **KHUÔN** từ repo/file khác ⇒ review cả khuôn: chỗ khuôn có mà bản này thiếu, chỗ bản thân khuôn sai ("đang chạy production" không phải "đã kiểm"), và chi phí của cùng một dòng có đổi bậc ở repo đích không.
+     - bám **KHUÔN** từ repo/file khác ⇒ review cả khuôn: chỗ khuôn có mà bản này thiếu, chỗ bản thân khuôn sai ("đang chạy production" không phải "đã kiểm"), và chi phí của cùng một dòng có đổi bậc ở repo đích không. Diff với khuôn chỉ thấy cái ĐÃ đổi ⇒ grep trong bản mới mọi định danh đặc thù của bản gốc (tên app, cổng, host, đường dẫn, ClientId): mỗi chỗ còn lại phải chứng minh đúng với cấu hình THẬT của bản mới, phần "giống khuôn" không mặc nhiên là convention.
      - thêm **thành viên thứ N+1** vào một họ cùng khuôn (app/module/service ngang hàng) ⇒ lấy **HIỆU tập file** với từng anh em: file có ở ≥2 anh em mà thiếu ở thành viên mới là finding cho tới khi chứng minh không cần. Trong config chép sang, field **định danh** (port, base URL nội bộ, AppId, audience, tên DB/queue) TRÙNG anh em là lỗi, không phải "đúng khuôn". Báo cáo ghi rõ đã chạy phép lấy hiệu — "không thiếu gì" và "chưa kiểm" trông y hệt nhau.
    - e. Chú thích biện minh / viện dẫn là **LỜI KHAI**, không phải kết luận:
-     - viện dẫn một artefact làm nguồn ("theo đúng X.cs", "cùng logic với Y") ⇒ phân giải bằng `git ls-tree -r --name-only` / `git grep` tại đúng revision: có → so từng điều kiện; không có trong repo → đối chiếu với truy vấn/hàm tương đương GẦN NHẤT đang chạy; có mà không chứa điều được viện dẫn → finding.
+     - viện dẫn một artefact làm nguồn ("theo đúng X.cs", "cùng logic với Y") ⇒ phân giải bằng `git ls-tree -r --name-only` / `git grep` tại đúng revision: có → so từng điều kiện; không có trong repo → đối chiếu với truy vấn/hàm tương đương GẦN NHẤT đang chạy; có mà không chứa điều được viện dẫn → finding. "Gần nhất" đo bằng HÀNH VI, không bằng tên: tên đã đổi/không còn ⇒ trích tiêu chí từ chính câu viện dẫn (nó gần như luôn nói đích LÀM GÌ) rồi grep theo tiêu chí đó — cái tên nghe giống nhất thường là cái bẫy. Nguồn NGOÀI repo còn đang sửa (bản gốc đang port, service khác) ⇒ mở nguồn ở trạng thái HÔM NAY: trích dẫn có số dòng/markup là ảnh chụp, hết hạn im lặng.
      - biện minh liệt kê N mục đích ⇒ tick lý do với TỪNG mục (lý do phủ k/N ⇒ finding ở phần còn lại); lý do không nêu phạm vi (chế độ, nhánh) mà code path dùng chung ⇒ kiểm từng chế độ; chú thích "ở đây không cần … như <module khác>" ⇒ đi đọc module đó.
 
 > 🔗 Bước 2-3 và 5 ở trên overlap với **Block 2 (Grounding)** trong prompt 4-agent ở `gitlab-review` — **không phải bản sao y hệt**: bước 5 (a–e) ở đây và bước 3–7 của Block 2 là CÙNG một danh sách, khối "Phủ phần CÒN LẠI" ở Step 3 dưới đây ↔ bước 8 của Block 2 (Block 2 chép dạng rút gọn vì subagent không đọc được file này); Block 2 có thêm bước 9 đọc **mặc định của framework** (chỉ review sâu mới cần); Step 1 có thêm **Grounding task** (bước 4) mà Block 2 không có. Sửa phần chung thì sửa cả hai bên — đừng gộp thành 1 quy tắc.
@@ -492,14 +547,17 @@ Trigger match là lenient: thêm từ `simplify` bất kỳ vị trí trong câu
 **Step 3 — Verify findings (lọc false positive TRƯỚC khi báo)**: với mỗi finding, tự kiểm:
 - Gắn được **`file:line` cụ thể** không? Không → bỏ.
 - **Chứng minh được bằng code đã đọc** (không phải suy diễn từ diff) không? Không chắc → bỏ hoặc hạ thành "cần xác nhận", đừng list như lỗi chắc chắn. Bằng chứng chỉ gián tiếp thì "cần xác nhận" là đúng chỗ — nhưng thử **đường đo** dưới đây trước khi hạ.
-- Đề xuất fix có **thật sự áp dụng được** với codebase này không (helper/util mình gợi ý có tồn tại không)? → verify rồi mới đề xuất.
+- Bằng chứng **gián tiếp** (tên nghe giống, hàng xóm cùng class, số đo của một phương án khác, giống khuôn) là giả thuyết: phân giải theo HÀNH VI, theo đúng instance/datasource, theo đúng phương án đã đo — rồi mới dùng cho hay chống finding.
+- Đề xuất fix có **thật sự áp dụng được VÀ đúng** với codebase này không? Helper/util gợi ý có tồn tại không, và có cùng ngữ nghĩa với code bị thay không (flag Efficiency/Quality ở `Review lenses`). Finding và fix là hai tuyên bố độc lập: đọc phần mã BẢN FIX sẽ chạm tới, không chỉ chỗ finding chỉ vào — sau fix đường đi mới chạy qua những gì? Fix tạo hình dạng dữ liệu chưa từng có (thêm phần tử, đổi thứ tự, gỡ điều kiện) ⇒ kiểm mọi hàm tiêu thụ phía sau, kèm test đỏ với bản fix SAI (không treo, không ném). → verify rồi mới đề xuất.
 
 **Đường đo — biến nghi ngờ thành bằng chứng** (chọn theo loại finding):
 
 | Loại finding | Phép đo |
 |---|---|
 | Ngữ nghĩa lúc chạy của thư viện bên thứ ba (ném hay nuốt, trả template hay giá trị) | Đọc mã thư viện chỉ ra GIẢ THUYẾT. Import và **chạy** chính hàm đó với dữ liệu thật tại đúng revision. Đã chứng minh một ca ⇒ quét cả tập cùng loại bằng vòng lặp ("1/26 chỗ", không "có một chỗ"); bản vá đề xuất cũng chạy qua giàn đó |
-| Thư viện ĐÓNG (DLL, không có source) | Tìm **tiền lệ cùng hình dạng** đã chạy production trong chính cặp class/hàm đó, có từ trước MR (cùng lời gọi, cùng cấu hình). Có ⇒ bác, ghi tiền lệ làm bằng chứng. Không có ⇒ mới chạy thật hoặc "cần xác nhận" |
+| Thư viện ĐÓNG (DLL, không có source) | Tìm **tiền lệ cùng hình dạng** đã chạy production trong chính cặp class/hàm đó, có từ trước MR (cùng lời gọi, cùng cấu hình, **cùng datasource/instance**). Có ⇒ bác, ghi tiền lệ làm bằng chứng. Không có ⇒ mới chạy thật hoặc "cần xác nhận" |
+| Phụ thuộc **ENGINE DB** (giới hạn tham số, cú pháp, kiểu, lock/collation) | Truy instance đang gọi hàm: field/factory → datasource → engine. Không suy từ hàm hàng xóm cùng class — một class repository có thể được dựng bởi nhiều factory trỏ engine khác nhau |
+| "Thay đổi khiến luồng Y bắt đầu thấy/nhận X" | Query đếm read-only TRƯỚC khi gán severity: X đã có trong dữ liệu lịch sử chưa, Y đã từng xử lý nó chưa — có ⇒ nghiệp vụ đang chạy, bỏ finding. Finding chỉ-FE cần chạy app ⇒ mock mạng bằng payload thật lấy read-only (route khớp theo pathname `/api/`, không substring); ghi DB dùng chung chỉ khi user đồng ý rõ |
 | Giá trị từ nguồn A đưa vào phép so ở đích B (cột/bảng/API khác, dù cùng tên) | "Cùng miền giá trị" là giả thuyết. Không chạm được dữ liệu ⇒ tìm **hằng số/enum/mapping đã có trong repo cho B**; một giá trị lệch là đủ báo `Major` kèm trích dẫn |
 | "Thiếu test / thiếu ca kiểm" | **Viết** đúng test đó vào file tạm, chạy, xoá trong cùng một lệnh. Pass ⇒ `Minor` (lỗ test, kèm test chạy được vào đề xuất); fail ⇒ `Blocker`/`Major` + đã có repro; thiếu fixture ⇒ nói rõ chỗ thiếu thay vì đề xuất chung chung |
 | Tiền đề "X luôn thoả P" (của finding, hoặc của lý do bác nó) | P được **code** cưỡng chế (validator, constraint DB, không tồn tại đường ghi, kiểu) hay chỉ **tài liệu/quy ước** ghi? Chỉ code mới cho nói "không thể xảy ra" — trỏ `file:line` chỗ chặn; trích được câu văn trong tài liệu không phải là đã kiểm |
@@ -530,8 +588,10 @@ finding, ca bắt buộc phải đỏ nếu code sai). Ca nghi ngờ và ca đ�
 dòng tổng kết (`Build FAILED`, `N Error(s)` gộp mọi nguyên nhân về một hình dạng): lỗi code
 (`CS*`, `TS*`, assertion) → finding; lỗi môi trường (file bị khoá `MSB3021`/`MSB3027`/`EBUSY`,
 port bận, thiếu secret, output path dùng chung) → gỡ nhiễu rồi đo lại, báo theo lần đo sạch và
-nói đã gỡ gì. Cách gỡ nhiễu sinh ra lỗi MỚI là lỗi của CÁCH ĐO, không phải của code. Không phân
-loại được → "cần xác nhận".
+nói đã gỡ gì. Cách gỡ nhiễu sinh ra lỗi MỚI là lỗi của CÁCH ĐO, không phải của code. Test đỏ kiểu
+timing (timeout, ngưỡng ms) ⇒ chạy lại CÔ LẬP ≥2 lần, không song song với typecheck/lint, và
+`git diff --quiet origin/<base> <sha> -- <file>`: xanh khi cô lập + file ngoài diff ⇒ flaky ngoài
+diff, không quy cho thay đổi. Không phân loại được → "cần xác nhận".
 
 > 🔗 Bước này overlap với tiêu chí verify Blocker/Major ở **Phase 2.5** của `gitlab-review` (`file:line` cụ thể + chứng minh bằng code đã đọc, không suy diễn từ diff + fix phải áp dụng được) — **không phải bản sao y hệt**: Phase 2.5 giữ bản TÓM TẮT của đường đo / ca tái hiện / hạ-bác-phải-verify ở trên và trỏ về đây; nó có thêm kiểm **reachability**, phân loại **trong/ngoài diff**, và xử lý **hai lens chữa ngược nhau** mà Step 3 không có, vì input của nó là 4 agent song song. Sửa phần chung thì sửa cả hai bên.
 
@@ -596,7 +656,11 @@ Spec đầy đủ Conventional Commits + Jira ID + push gate. Self-contained: kh
 | `cat "$(git rev-parse --show-toplevel)/.commit-scopes"` | Scope allowlist (works từ subdir) |
 
 - **Đọc dòng `On branch X` của CHÍNH lần chạy này**, không dùng tên nhánh nhớ từ lượt trước — repo là tài nguyên dùng chung với user, họ có thể đã checkout nhánh khác (vd nhánh deploy để build) giữa hai lượt. Cổng chặn cơ học nằm ở Step 5.
+- **Cổng tự kiểm mắt trước**: diff đang commit chưa qua `review the last change` trong session ⇒ DỪNG, đề xuất chạy review trước — chỉ bỏ khi user nói rõ.
 - **Diff có FILE MỚI** (`??` / `A` trong `git status`) ⇒ chạy **gate đầy đủ** của project (typecheck + lint + test + build) trước khi commit. Test runner (vitest/jest…) phần lớn transpile rồi vứt kiểu, không type-check: "test của file đó xanh" không chứng minh file biên dịch được, mà file mới là lần đầu nó đi qua trình biên dịch.
+- Lệnh test/gate là lệnh **CỦA DỰ ÁN** (scripts trong `package.json`, `Makefile`, CI config), chạy ít nhất trước commit đầu và trước push — không tự trỏ runner vào thư mục mình sửa (monorepo: bỏ sót test ngoài thư mục, nạp sai alias). Chạy một lần trên nhánh đích để biết vạch xuất phát. Thêm mục vào registry dùng chung (route, menu, DI, danh sách module) ⇒ tìm test canh registry đó, nó nằm cạnh registry chứ không cạnh code mình.
+- File `M` mà `git diff --ignore-cr-at-eol --stat` rỗng ⇒ churn EOL do công cụ: `git checkout -- <file>`, không stage.
+- Vừa chạy bộ sinh code (OpenAPI client, ORM, protobuf, i18n) ⇒ `git status --short --untracked-files=all` đọc TOÀN BỘ, không lọc theo thư mục mình quan tâm. Mọi đường dẫn ngoài phạm vi phải được giải thích trước commit (xoá hoặc nói vì sao giữ); quyết bằng `git ls-files "<dir>" | wc -l` (0 ⇒ chỉ chứa tệp vừa sinh), không theo tên thư mục.
 
 **Step 2 — Partial-staging guard**:
 
@@ -606,6 +670,7 @@ Spec đầy đủ Conventional Commits + Jira ID + push gate. Self-contained: kh
 | User: commit staged-only | Tiến hành với index hiện tại |
 | User: stage rest then combine | `git add <files>` rồi commit |
 | Default | KHÔNG tự `git add` unstaged hunks (user có thể đã `git add -p` cố ý) |
+| Trước MỖI `git commit` (kể cả commit thứ hai khi tách) | `git diff --cached --name-status` phải khớp đúng danh sách file định commit; thừa ⇒ STOP. `git mv` / `git rm` stage ngay lúc chạy — tách commit thì dùng `mv` thường rồi `git add` đúng lúc, hoặc commit phần rename trước. Kiểm trên HEAD cuối không bao giờ thấy commit trung gian hỏng |
 
 **Step 3 — Atomic check**:
 
@@ -707,6 +772,9 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>   ← XÓA 
    | `UPSTREAM` = `origin/<LOCAL>` (tên local match remote) | `git push` (bình thường) |
    | `UPSTREAM` = `origin/<old-name>` (tên local KHÁC upstream) | **Rename scenario detected**. STOP, báo user: "Local branch `<LOCAL>` đang track `<UPSTREAM>` — có vẻ branch đã được rename. Cần dùng trigger `rename branch <LOCAL>` để sync remote, KHÔNG nên push trực tiếp" |
 
+   **Trước MỌI push, chạy lại ngay lúc đó** (trạng thái remote đọc từ phiên trước / bản tóm tắt là ảnh chụp):
+   - Nhánh từng có MR ⇒ `glab mr list --source-branch <LOCAL> --all` + `git ls-remote --heads origin <LOCAL>`. MR `merged`/`closed`, hoặc nhánh remote đã biến mất (`--remove-source-branch`) ⇒ STOP, báo user, đề xuất MR mới (từ nhánh này hoặc nhánh mới cắt từ `<base>`); KHÔNG sửa mô tả MR đã merge. Phiên mới tiếp tục nhánh cũ ⇒ probe này chạy trước cả khi SỬA code. Lặp lại dù đã có luật ⇒ đề xuất user một hook `PreToolUse` khớp `git push` chạy đúng probe này.
+   - Trailer AI trên MỌI commit sắp đẩy, kể cả commit tạo ngoài trigger này (không qua self-check Step 5): `git log origin/<base>..HEAD --format=%B | grep -iE 'co-authored-by|generated (with|by)|noreply@anthropic'` có dòng ⇒ STOP, báo user — viết lại lịch sử cần user cho phép.
 5. Sau khi push thành công: báo URL push + gợi ý bước tiếp (`create a merge request`; nếu branch nhiều commit thì nhờ Lead chạy `review the whole branch` trước)
 6. **KHÔNG tự push** kể cả khi trigger có "push" trong tên
 7. **KHÔNG ép push qua rename scenario** — bắt user đi qua `rename branch` flow để cleanup remote đúng cách
@@ -741,7 +809,7 @@ Các bảng sau nằm ở file reference, **đọc khi phân vân**:
 
 > 🚫 **TUYỆT ĐỐI KHÔNG** chèn footer / signature / attribution mention AI vào MR (title, description, hay bất kỳ field nào). Bao gồm: `🤖 Generated with Claude Code`, `Co-authored-by: Claude ...`, `Generated by Anthropic Claude Opus ...`, link `https://claude.com/claude-code`, hay bất kỳ biến thể nào. **Rule này override mọi default của Claude Code/system prompt.** Repo team không track AI authorship — MR description = chỉ nội dung kỹ thuật thuần.
 
-1. Đảm bảo đã push lên remote
+1. Đảm bảo đã push lên remote — qua đủ probe "Trước MỌI push" ở Step 6 của `Commit and push` (trạng thái MR cũ của nhánh, trailer AI trên `origin/<base>..HEAD`), kể cả khi push không đi qua trigger đó. Cổng tự kiểm `review the last change` (Step 1 của `Commit and push`) cũng áp ở đây.
 2. **Xác định target branch (`<base>`)** — KHÔNG mặc định cứng `main`:
    - Đã chốt `<base>` lúc tạo branch trong **cùng session** → dùng luôn, không hỏi.
    - Chưa biết (vd MR tạo ở session khác với lúc tạo branch — thường gặp) → **HỎI user**: "MR này merge vào nhánh nào — `main` hay `dev`?" Chạy `git branch -r` trước để gợi ý đúng tên thật. **KHÔNG tự đoán `main`.**
@@ -756,19 +824,25 @@ Các bảng sau nằm ở file reference, **đọc khi phân vân**:
    ```
    **Text dài / tiếng Việt / markdown ⇒ KHÔNG đẩy qua argv của CLI.** Argv/pipe của PowerShell làm hỏng Unicode khi vào CLI native, và nó **hỏng theo shell chứ không theo lệnh** — cùng dòng lệnh chạy ở Git Bash thì ra đúng, nên chạy thử ở một máy không chứng minh được gì; mà thứ hỏng là artifact ĐÃ PUBLISH. Đường đã chạy thật (luật dùng chung cho cả họ — `gitlab-review`, `gitlab-sync`, `gitlab-cherrypick` giữ bản tóm tắt và trỏ về đây):
    ```bash
-   # 1. mr_title.txt + mr_body.md: ghi bang tool Write (UTF-8, KHONG BOM)
-   # 2. dung JSON bang python: chi truyen path TUONG DOI (interpreter Windows-native khong hieu
-   #    path MSYS /c/...), json.dump mac dinh ensure_ascii -> file JSON thuan ASCII
-   python -c "import json,sys; t,b=(open(f,encoding='utf-8').read().strip() for f in sys.argv[1:3]); json.dump({'source_branch':sys.argv[3],'target_branch':sys.argv[4],'title':t,'description':b,'remove_source_branch':True},open('mr.json','w'))" mr_title.txt mr_body.md <source-branch> <base>
-   # 3. POST — BAT BUOC co -H: thieu la HTTP 415 "content-type '' is not supported" va KHONG tao gi
-   glab api --method POST -H "Content-Type: application/json" "projects/:id/merge_requests" --input mr.json
+   # 0. CHAY TU TRONG REPO: glab suy host tu git remote cua cwd — ngoai repo, request di sai host,
+   #    output khong phai JSON va KHONG tao gi. Bat buoc o cho khac thi them --hostname <host>.
+   #    Moi path file: TUYET DOI dang Windows (cygpath -w) — interpreter Windows-native khong hieu
+   #    /c/..., con path tuong doi thi buoc phai cd ra khoi repo.
+   S=<scratch-dir>
+   # 1. $S/mr_title.txt + $S/mr_body.md: ghi bang tool Write (UTF-8, KHONG BOM)
+   # 2. JSON bang thu vien (json.dump mac dinh ensure_ascii -> thuan ASCII). KHONG escape tay:
+   #    loi escape ra HTTP 400 "Bad Request" khong chi cho nao.
+   python -c "import json,sys; t,b=(open(f,encoding='utf-8').read().strip() for f in sys.argv[1:3]); json.dump({'source_branch':sys.argv[3],'target_branch':sys.argv[4],'title':t,'description':b,'remove_source_branch':True},open(sys.argv[5],'w'))" "$(cygpath -w "$S/mr_title.txt")" "$(cygpath -w "$S/mr_body.md")" <source-branch> <base> "$(cygpath -w "$S/mr.json")"
+   # 3. POST — BAT BUOC co -H: thieu la HTTP 415 "content-type '' is not supported" va KHONG tao gi.
+   #    Luu output THO ra file roi moi parse — loi khong-phai-JSON van doc duoc.
+   glab api --method POST -H "Content-Type: application/json" "projects/:id/merge_requests" --input "$(cygpath -w "$S/mr.json")" > "$S/mr_out.json"
    # 4. doc lai TRUOC khi coi la xong / truoc khi thu lai (lenh bao loi chua noi duoc da ghi hay chua)
    glab api "projects/:id/merge_requests?source_branch=<source-branch>&state=opened"
    ```
-   So title + độ dài description đọc về với bản nguồn. Thử lại khi chưa đọc lại = rủi ro tạo MR/comment trùng. (Nếu thay bước 2 bằng cách đọc biến shell trong `python -c` thì biến phải `export` mới thấy — đó là lý do mẫu trên truyền qua argv.)
+   So title + độ dài description đọc về với bản nguồn (decode UTF-8 — mojibake lúc đọc lại thường là decode sai phía client, không phải server lưu hỏng). Thử lại khi chưa đọc lại = rủi ro tạo MR/comment trùng. HTTP 400 `Bad Request` trần ⇒ nghi JSON sai cú pháp trước tiên. (Nếu thay bước 2 bằng cách đọc biến shell trong `python -c` thì biến phải `export` mới thấy — đó là lý do mẫu trên truyền qua argv.)
 4. Title MR = subject của commit gần nhất (hoặc tóm tắt nếu nhiều commit). **KHÔNG** thêm tag `[Claude]`/`[AI]` vào title.
 5. Description MR cần có **đúng 3 mục** (không thêm gì khác):
-   - **## Summary**: 1-3 bullet point về thay đổi
+   - **## Summary**: 1-3 bullet point về thay đổi. MR sửa lỗi ⇒ một bullet nêu **CÁCH HỎNG** trước bản vá (vd "không gửi được khiếu nại nào — BE trả 400", không phải "thiếu một trường"), đo bằng cách gỡ bản vá ra rồi chạy lại trên hệ thật — đo bản đã vá chỉ ra "xanh". Nhiều tầng chốt (validator, guard service, ràng buộc DB) ⇒ ghi tầng nào bật ở môi trường đã đo
    - **## Test plan**: checklist test
    - **## Related**: link Jira task `[<TASK-ID>](<jira-url>)` nếu biết URL
 6. **Self-check trước khi tạo MR**:
@@ -791,7 +865,7 @@ Các bảng sau nằm ở file reference, **đọc khi phân vân**:
 - [ ] Cache hit sau lần fetch đầu (verify qua logs)
 
 ## Related
-- [HNCW-317](https://jira.fastlink.vn/browse/HNCW-317)
+- [HNCW-317](https://jira.example.com/browse/HNCW-317)
 ```
 
 **Ví dụ description SAI (phải xóa các dòng có ❌)**:
@@ -811,13 +885,16 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>  ❌ XÓA
 ```
 
 ### "fix all issues" / "fix issue #<N>" / "fix issues #1, #2"
-1. Đọc lại các issue đã raise (từ comment trên MR hoặc từ output review trước đó)
+1. Đọc lại các issue đã raise (từ comment trên MR hoặc từ output review trước đó). Fix đề xuất trong issue là giả thuyết: qua tiêu chí "áp dụng được VÀ đúng" ở Step 3 của `review the last change` trước khi áp
 2. Nếu user chỉ định số issue → chỉ fix các issue đó
 3. Nếu "fix all" → fix `Blocker` + `Major`. `Minor` liệt kê lại, nói rõ "gõ `fix issue #N` nếu muốn fix cụ thể". Issue mang nhãn `🔒 Accepted` (owner đã chấp nhận rủi ro) **loại khỏi tập auto-fix** như `Minor`, báo một dòng "bỏ qua #N vì đã Accepted" — sửa lại nó là tự hoàn tác quyết định của owner
    - **Trước khi sửa dòng đầu tiên: chụp trạng thái TRƯỚC** cho mọi `Blocker`/`Major` sắp fix — chạy đúng lệnh/URL/ca sẽ dùng để nghiệm thu, lưu output. Lúc này rẻ (bản hỏng đang chạy sẵn); sau khi sửa thì phải stash + build lại, và thực tế là bị bỏ
 4. Sau mỗi fix, verify — **đối chiếu TRƯỚC/SAU trên cùng một đầu vào** (chỉ đo bản sau thì không phân biệt được "đã sửa" với "vốn không hỏng"), chạy test/build nếu có (file mới ⇒ gate đầy đủ, xem Step 1 của `Commit and push`). Rồi soát phạm vi mà bản sửa có thể làm hỏng:
    - Bug "state bị ghi sai" ⇒ liệt kê **mọi nơi GHI** state đó (grep chính tên biến/cột/field, không grep quanh chỗ sửa) và đối chiếu từng nơi với trạng thái mới mà bản sửa sinh ra. Diễn lại đúng kịch bản trong finding KHÔNG tính là xác minh — finding mô tả một đường đi, bug nằm ở điểm ghi. Bản sửa thêm trạng thái mới (đổi kiểu trả về, thêm cờ, thêm nhánh lỗi) ⇒ liệt kê consumer của trạng thái đó
    - Bản sửa đổi **chữ ký được gọi** (overload khác, method khác cùng nhóm) ⇒ test double không tự đi theo, và nó đỏ dưới dạng lỗi CODE (null sâu trong LINQ) hoặc tệ hơn là **xanh sai**. Grep mọi stub/assert trỏ chữ ký cũ (`Returns`, `Setup`, `Received`, `when(...)`), stub chữ ký mới từ cùng nguồn dữ liệu (đừng trả hằng), `Received(...)` chuyển sang chữ ký mới **và** thêm `DidNotReceive()` cho chữ ký cũ. Chốt: tạm hoàn nguyên bản sửa, chạy lại — test phải ĐỎ; không đỏ thì nó không canh gì
+   - Sửa một LỚP lỗi ⇒ viết lớp lỗi thành một câu không chứa tên hàm ("caller không đọc được kết quả gửi"), grep cả module, liệt kê MỌI chỗ khớp và đánh dấu đã sửa / cố ý bỏ — sửa 3/4 chỗ tạo niềm tin đã sạch. Nhánh trước không tới được nay tới được ⇒ code chưa từng chạy
+   - Fix kiểu cổng chặn (validate, guard) ⇒ thêm ca hợp lệ đi qua cổng: fix chặn nhầm đường hợp lệ cũng xanh với test chỉ khoá ca hỏng
+   - Fix mà tầng test hiện có không với tới ⇒ chưa là "đã sửa" cho tới khi đo trên hệ thật: SQL dạng chuỗi ⇒ chạy trên đúng engine của datasource; DDL/migration/script khởi tạo ⇒ chạy trên DB ĐÃ CÓ dữ liệu, HAI lần, rồi đo lại schema (`CREATE TABLE IF NOT EXISTS` bỏ qua cả thân khi bảng đã tồn tại — đọc hết file tìm khối bù/`ALTER` có sẵn). Commit/báo cáo chỉ ghi "đã sửa" khi đã chứng minh tác dụng
    - Chèn code bằng script ⇒ đọc dòng ngay trên điểm chèn: chú thích khối/attribute/decorator thì chèn TRƯỚC cả khối (nếu không, chú thích rời khỏi khai báo nó mô tả mà mọi gate vẫn xanh)
 5. Khi hoàn tất TẤT CẢ fix, **DỪNG và HỎI user** trước khi commit/push:
    - Tóm tắt các issue đã fix + file đã thay đổi
@@ -836,7 +913,8 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>  ❌ XÓA
 - **KHÔNG commit secrets**: `.env`, key, token, password
 - **Trước khi đẩy nội dung ra BẤT KỲ đích ngoài nào** (push, tạo MR, post comment, publish): quét bí mật theo **GIÁ TRỊ THẬT**, không chỉ theo mẫu. Nguồn giá trị là chính các file bị loại khỏi lần đẩy (`.env*`, `*.local`, config bị ignore): lấy giá trị các biến tên chứa `SECRET`/`TOKEN`/`KEY`/`PASSWORD`, tìm đúng chuỗi đó trong **toàn bộ tập sắp đẩy** (không chỉ diff). Regex theo mẫu chỉ bắt bí mật *trông giống* bí mật. Bắt được ⇒ DỪNG, trình file + dòng + vai của câu đó, để chủ repo quyết (che hay chấp nhận); che thì thay giá trị bằng placeholder kèm chỗ chứa giá trị thật, giữ nguyên nghĩa câu. 🚫 Không in giá trị bí mật ra output — chỉ tên biến, file, số dòng
 - Nếu pre-commit hook fail: fix nguyên nhân và tạo commit MỚI, KHÔNG dùng `--amend`
-- Khi `git status` cho thấy file lạ/branch lạ không quen thuộc, KHÔNG xoá — hỏi user xem có phải work-in-progress không
+- Khi `git status` cho thấy file lạ/branch lạ không quen thuộc, KHÔNG xoá — hỏi user xem có phải work-in-progress không. Ngoại lệ hẹp duy nhất: tệp do CHÍNH mình vừa sinh trong phiên này (bộ sinh code mình chạy) VÀ đã chứng minh chưa từng được theo dõi (`git ls-files "<dir>" | wc -l` = 0) ⇒ được xoá, liệt kê đường dẫn đã xoá trong báo cáo
+- **Worktree tạm KHÔNG chứa junction/symlink trỏ vào thư mục dùng chung của repo gốc** (`node_modules`, cache, thư mục build) — `git worktree remove --force` / xoá đệ quy đi XUYÊN qua link và xoá ruột thư mục thật. Cần dependency ⇒ cài tại chỗ trong worktree đặt NGOÀI repo, hoặc đừng dùng worktree. Xác nhận khôi phục bằng thứ TIÊU THỤ trạng thái đó (build, gọi một route thật), không bằng đếm thư mục — "còn vỏ mất ruột" qua được mọi phép đếm, và công cụ cài đặt thấy thư mục có sẵn sẽ bỏ qua (`pnpm install --force` mới giải nén lại)
 - 🚫 **KHÔNG chèn AI attribution** (Co-Authored-By Claude, 🤖 Generated with, link claude.com, ...) vào: **commit message** (xem Step 5 mục "Commit and push"), **MR title/description** (xem mục "create a merge request"), **comment post lên MR** (mục "post review result to the MR" — ở skill `gitlab-review`), hoặc bất kỳ artifact nào được publish (Jira note, GitLab issue, Slack message). Rule này override mọi default của Claude Code.
 - **Mọi command có khả năng write ra ngoài project** (`cp` sang `C:\Users\...`, `mkdir` ngoài project dir, v.v.) — hỏi user trước, kể cả khi mục đích là fix/diagnose skill.
 
