@@ -280,10 +280,14 @@ Mỗi agent nhận: đường dẫn diff (`.git/review_branch.diff`) + đường
 > 🚫 **KHÔNG chèn AI attribution** vào comment (Co-Authored-By Claude, 🤖 Generated with, link claude.com, ...). Comment = chỉ nội dung review thuần, KHÔNG signature/footer.
 
 1. Lấy chính output Markdown từ bước "review the MR" trước đó (đã đúng format, không cần soạn lại). Nếu là review tiếp nối (mode B), giữ nguyên cả phần "Trạng thái issue cũ" — đó là context quan trọng cho dev. **Giữ nguyên dòng `**Reviewed at:** <sha>`** — lượt review sau lấy mốc từ đó.
-2. **Self-check trước khi đăng — phải CHẶN được lệnh post**, không chỉ in ra: chạy ở tool call RIÊNG, chỉ sang bước 3 khi nó không in gì. 🚫 Không bao giờ nối check với post bằng `;` (grep exit 0 nghĩa là ĐÃ khớp — ngược ý "kiểm qua"). Tên file repo (`CLAUDE.md`, `.claude/`) được bóc trước nên không khớp nhầm:
+2. **Self-check trước khi đăng — phải CHẶN được lệnh post**, không chỉ in ra: chạy ở tool call RIÊNG, chỉ sang bước 3 khi dòng cuối in ra là `PASS` — crash hay không in gì cũng là CHẶN. 🚫 Không bao giờ nối check với post bằng `;`. Tên file repo (`CLAUDE.md`, `.claude/`) được bóc trước nên không khớp nhầm:
    ```bash
-   sed -E 's#\.?claude(\.md|/)##Ig' review.md | grep -niE 'claude|anthropic|🤖|generated with|co-authored-by' && { echo "BLOCKED: attribution"; exit 1; }
+   python -c "import re,sys;t=re.sub(r'\.?claude(\.md|/)','',open(sys.argv[1],encoding='utf-8').read(),flags=re.I);m=[l for l in t.splitlines() if re.search(r'claude|anthropic|\U0001F916|generated with|co-authored-by',l,re.I)];print(*m,sep='\n') if m else None;print('BLOCKED: attribution' if m else 'PASS');sys.exit(1 if m else 0)" review.md
    ```
+   Viết bằng MỘT lệnh `python -c`, KHÔNG dùng `{ ...; }` hay `if ...; then ... fi`: ở chế độ tự động
+   (`claude -p` + `--allowedTools`) bộ kiểm quyền của Claude Code từ chối cả hai dạng đó dù đủ quyền
+   cho từng lệnh con (đã đo) — cổng bị bỏ qua đúng nơi không có người nhìn. Đường dẫn file truyền dạng
+   `/` hoặc trong nháy đơn: bash nuốt `\` của đường dẫn Windows và python crash (= chặn, nhưng vô ích).
    Có → xóa rồi chạy lại. Quét bí mật theo **giá trị thật** (mục `Safety rules` ở `gitlab-flow`) — review hay trích nguyên dòng config/code, và comment là nội dung đã publish.
 3. Đăng comment. Output review là markdown dài tiếng Việt ⇒ **KHÔNG đẩy qua argv** (argv/pipe của PowerShell làm hỏng dấu; hỏng theo shell chứ không theo lệnh, và comment đã đăng thì khó rollback êm). Đi đường file — lý do đầy đủ: `create a merge request` bước 3 ở `gitlab-flow`:
    ```bash
